@@ -21,23 +21,27 @@ interface LearningStyle {
   description: string;
 }
 
+interface ActivityStep {
+  id: string;
+  description: string;
+  durationMin: number;
+  durationMax: number;
+  durationUnit: string;
+}
+
+interface ActivityDevelopment {
+  description: string;
+  steps: ActivityStep[];
+}
+
 interface Activity {
   id: string;
   name: string;
   objective: string;
   materials: string[];
-  development: {
-    description: string;
-    steps: {
-      id: string;
-      description: string;
-      durationMin: number;
-      durationMax: number;
-      durationUnit: string;
-    }[];
-  };
-  barriers: string[];
   learningStyles: string[];
+  barriers: string[];
+  development: ActivityDevelopment;
 }
 
 const InterventionWizard = () => {
@@ -100,11 +104,42 @@ const InterventionWizard = () => {
             
             if (styleError) throw styleError;
             
+            // Convert materials from Json to string[]
+            let materials: string[] = [];
+            if (Array.isArray(activity.materials)) {
+              materials = activity.materials as string[];
+            } else if (typeof activity.materials === 'string') {
+              try {
+                materials = JSON.parse(activity.materials);
+              } catch (e) {
+                console.error('Error parsing materials JSON', e);
+                materials = [];
+              }
+            }
+            
+            // Convert development from Json to ActivityDevelopment
+            let development: ActivityDevelopment = {
+              description: '',
+              steps: []
+            };
+            
+            if (typeof activity.development === 'object') {
+              development = activity.development as unknown as ActivityDevelopment;
+            } else if (typeof activity.development === 'string') {
+              try {
+                development = JSON.parse(activity.development);
+              } catch (e) {
+                console.error('Error parsing development JSON', e);
+              }
+            }
+            
             return {
               ...activity,
+              materials: materials,
+              development: development,
               barriers: activityBarriers.map(ab => ab.barrier_id),
               learningStyles: activityStyles.map(als => als.learning_style_id)
-            };
+            } as Activity;
           })
         );
         
