@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import Navbar from "@/components/Navbar";
@@ -16,7 +17,37 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/components/ui/use-toast";
 import { ArrowLeft, Plus, Save, Trash2, X } from "lucide-react";
-import { Activity, barriers, learningStyles, activities as initialActivities } from "@/data/sampleData";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/context/AuthContext";
+
+interface Activity {
+  id: string;
+  name: string;
+  objective: string;
+  materials: string[];
+  barriers: string[];
+  learningStyles: string[];
+  development: {
+    description: string;
+    steps: {
+      id: string;
+      description: string;
+      durationMin: number;
+      durationMax: number;
+      durationUnit: "minutos" | "horas";
+    }[];
+  };
+}
+
+interface Barrier {
+  id: string;
+  name: string;
+}
+
+interface LearningStyle {
+  id: string;
+  name: string;
+}
 
 interface ActivityFormProps {
   isIntervention?: boolean;
@@ -26,9 +57,14 @@ const ActivityForm = ({ isIntervention = false }: ActivityFormProps) => {
   const { id } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { user } = useAuth();
   const isEditing = !!id;
   
-  const [activities, setActivities] = useState<Activity[]>(initialActivities);
+  const [barriers, setBarriers] = useState<Barrier[]>([]);
+  const [learningStyles, setLearningStyles] = useState<LearningStyle[]>([]);
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  
   const [activity, setActivity] = useState<Activity>({
     id: crypto.randomUUID(),
     name: "",
@@ -61,6 +97,103 @@ const ActivityForm = ({ isIntervention = false }: ActivityFormProps) => {
     durationUnit: "minutos" as "minutos" | "horas"
   });
   const [currentStepIndex, setCurrentStepIndex] = useState(-1);
+  
+  // Función para cargar los datos iniciales
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsLoading(true);
+      try {
+        // Cargar barreras
+        const { data: barriersData, error: barriersError } = await supabase
+          .from("barriers")
+          .select("id, name")
+          .order("name");
+          
+        if (barriersError) throw barriersError;
+        setBarriers(barriersData || []);
+        
+        // Cargar estilos de aprendizaje
+        const { data: stylesData, error: stylesError } = await supabase
+          .from("learning_styles")
+          .select("id, name")
+          .order("name");
+          
+        if (stylesError) throw stylesError;
+        setLearningStyles(stylesData || []);
+        
+        // Cargar actividades
+        const { data: activitiesData, error: activitiesError } = await supabase
+          .from("activities")
+          .select("*");
+          
+        if (activitiesError) throw activitiesError;
+        
+        // Procesar las actividades para manejar las relaciones
+        if (activitiesData) {
+          const processedActivities = activitiesData.map(act => ({
+            ...act,
+            barriers: [], // Se cargarán después
+            learningStyles: [], // Se cargarán después
+            materials: Array.isArray(act.materials) ? act.materials : [],
+            development: typeof act.development === 'object' ? act.development : {
+              description: "",
+              steps: []
+            }
+          }));
+          
+          setActivities(processedActivities);
+          
+          // Si estamos editando, cargar la actividad específica
+          if (isEditing && id) {
+            const currentActivity = processedActivities.find(a => a.id === id);
+            if (currentActivity) {
+              // Cargar las barreras de esta actividad
+              const { data: activityBarriers, error: abError } = await supabase
+                .from("activity_barriers")
+                .select("barrier_id")
+                .eq("activity_id", id);
+                
+              if (abError) throw abError;
+              
+              // Cargar los estilos de aprendizaje de esta actividad
+              const { data: activityStyles, error: asError } = await supabase
+                .from("activity_learning_styles")
+                .select("learning_style_id")
+                .eq("activity_id", id);
+                
+              if (asError) throw asError;
+              
+              // Establecer la actividad con todas sus relaciones
+              setActivity({
+                ...currentActivity,
+                barriers: activityBarriers?.map(ab => ab.barrier_id) || [],
+                learningStyles: activityStyles?.map(as => as.learning_style_id) || []
+              });
+            } else {
+              // Si no se encuentra la actividad, redirigir
+              toast({
+                title: "Error",
+                description: "Actividad no encontrada",
+                variant: "destructive"
+              });
+              navigate("/actividades");
+            }
+          }
+        }
+      } catch (error: any) {
+        console.error("Error loading data:", error);
+        toast({
+          title: "Error",
+          description: "Error al cargar los datos necesarios",
+          variant: "destructive"
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchData();
+  }, [id, isEditing, navigate, toast]);
 
   const handleDurationUnitChange = (value: string) => {
     setCurrentStep(prev => {
@@ -71,22 +204,6 @@ const ActivityForm = ({ isIntervention = false }: ActivityFormProps) => {
       };
     });
   };
-
-  useEffect(() => {
-    if (isEditing) {
-      const existingActivity = activities.find(a => a.id === id);
-      if (existingActivity) {
-        setActivity(existingActivity);
-      } else {
-        toast({
-          title: "Error",
-          description: "Actividad no encontrada",
-          variant: "destructive"
-        });
-        navigate("/actividades");
-      }
-    }
-  }, [id, isEditing, activities, navigate, toast]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -216,7 +333,7 @@ const ActivityForm = ({ isIntervention = false }: ActivityFormProps) => {
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!activity.name.trim() || !activity.objective.trim() || 
@@ -230,18 +347,109 @@ const ActivityForm = ({ isIntervention = false }: ActivityFormProps) => {
       return;
     }
     
-    if (isEditing) {
-      setActivities(prev => prev.map(a => a.id === id ? activity : a));
-    } else {
-      setActivities(prev => [...prev, activity]);
+    try {
+      setIsLoading(true);
+      
+      // Preparar los datos para guardar
+      const activityData = {
+        name: activity.name,
+        objective: activity.objective,
+        materials: activity.materials,
+        development: activity.development,
+        created_by: user?.id || ''
+      };
+      
+      let activityId = activity.id;
+      
+      if (isEditing) {
+        // Actualizar la actividad
+        const { error } = await supabase
+          .from("activities")
+          .update(activityData)
+          .eq("id", id);
+          
+        if (error) throw error;
+      } else {
+        // Crear nueva actividad
+        const { data, error } = await supabase
+          .from("activities")
+          .insert([activityData])
+          .select()
+          .single();
+          
+        if (error) throw error;
+        if (data) activityId = data.id;
+      }
+      
+      // Primero eliminamos las relaciones existentes si es una edición
+      if (isEditing) {
+        await supabase
+          .from("activity_barriers")
+          .delete()
+          .eq("activity_id", activityId);
+          
+        await supabase
+          .from("activity_learning_styles")
+          .delete()
+          .eq("activity_id", activityId);
+      }
+      
+      // Insertar barreras relacionadas
+      if (activity.barriers.length > 0) {
+        const barrierRows = activity.barriers.map(barrierId => ({
+          activity_id: activityId,
+          barrier_id: barrierId
+        }));
+        
+        const { error: barrierError } = await supabase
+          .from("activity_barriers")
+          .insert(barrierRows);
+          
+        if (barrierError) throw barrierError;
+      }
+      
+      // Insertar estilos de aprendizaje relacionados
+      if (activity.learningStyles.length > 0) {
+        const styleRows = activity.learningStyles.map(styleId => ({
+          activity_id: activityId,
+          learning_style_id: styleId
+        }));
+        
+        const { error: styleError } = await supabase
+          .from("activity_learning_styles")
+          .insert(styleRows);
+          
+        if (styleError) throw styleError;
+      }
+      
+      toast({
+        title: "Éxito",
+        description: isEditing ? "Actividad actualizada correctamente" : "Actividad creada correctamente"
+      });
+      
+      navigate("/actividades");
+    } catch (error: any) {
+      console.error("Error saving activity:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Error al guardar la actividad",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
     }
-    
-    toast({
-      title: "Éxito",
-      description: isEditing ? "Actividad actualizada correctamente" : "Actividad creada correctamente"
-    });
-    navigate("/actividades");
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex flex-col bg-gray-50">
+        <Navbar />
+        <div className="container mx-auto px-4 py-8 flex justify-center items-center flex-1">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
@@ -532,8 +740,12 @@ const ActivityForm = ({ isIntervention = false }: ActivityFormProps) => {
               <Button variant="outline" type="button" asChild>
                 <Link to="/actividades">Cancelar</Link>
               </Button>
-              <Button type="submit">
-                <Save size={18} className="mr-2" />
+              <Button type="submit" disabled={isLoading}>
+                {isLoading ? (
+                  <div className="animate-spin h-5 w-5 border-2 border-b-transparent rounded-full mr-2"></div>
+                ) : (
+                  <Save size={18} className="mr-2" />
+                )}
                 {isEditing ? "Actualizar Actividad" : "Crear Actividad"}
               </Button>
             </div>
