@@ -12,6 +12,7 @@ import Activities from "./pages/Activities";
 import Interventions from "./pages/Interventions";
 import ActivityForm from "./pages/ActivityForm";
 import InterventionForm from "./pages/InterventionForm";
+import InterventionWizardPage from "./pages/InterventionWizardPage";
 
 const queryClient = new QueryClient();
 
@@ -29,6 +30,7 @@ const App = () => (
           <Route path="/actividades/nueva" element={<ActivityForm />} />
           <Route path="/actividades/editar/:id" element={<ActivityForm />} />
           <Route path="/intervenciones" element={<Interventions />} />
+          <Route path="/intervenciones/asistente" element={<InterventionWizardPage />} />
           <Route path="/intervenciones/nueva" element={<InterventionForm />} />
           <Route path="/intervenciones/editar/:id" element={<InterventionForm />} />
           <Route path="*" element={<NotFound />} />

@@ -9,11 +9,7 @@ import { SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet
 import { useToast } from "@/components/ui/use-toast";
 import { barriers, learningStyles, activities, Activity, Barrier, LearningStyle } from "@/data/sampleData";
 
-interface InterventionWizardProps {
-  onClose: () => void;
-}
-
-const InterventionWizard = ({ onClose }: InterventionWizardProps) => {
+const InterventionWizard = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   
@@ -84,7 +80,6 @@ const InterventionWizard = ({ onClose }: InterventionWizardProps) => {
     
     // Navigate to intervention form with pre-populated data
     navigate(`/intervenciones/nueva?activity=${selectedActivity}&barrier=${selectedBarrier}&styles=${selectedStyles.join(",")}`);
-    onClose();
   };
   
   return (

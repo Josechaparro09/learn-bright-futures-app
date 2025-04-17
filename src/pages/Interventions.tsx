@@ -1,12 +1,10 @@
-
 import { useState } from "react";
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import InterventionWizard from "@/components/InterventionWizard";
+import InterventionComments from "@/components/InterventionComments";
 import { 
   Calendar, ChevronDown, ChevronUp, Plus, Search, User, 
-  BookOpen, Filter, ClipboardList 
+  BookOpen, Filter, ClipboardList, MessageSquare 
 } from "lucide-react";
 import { 
   interventions as initialInterventions, 
@@ -16,20 +14,28 @@ import {
   Intervention 
 } from "@/data/sampleData";
 import { Link } from "react-router-dom";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 const Interventions = () => {
   const [interventions, setInterventions] = useState<Intervention[]>(initialInterventions);
   const [searchTerm, setSearchTerm] = useState("");
   const [expandedInterventions, setExpandedInterventions] = useState<Record<string, boolean>>({});
+  const [showComments, setShowComments] = useState<Record<string, boolean>>({});
   const [showFilters, setShowFilters] = useState(false);
   const [teacherFilter, setTeacherFilter] = useState<string[]>([]);
   const [activityFilter, setActivityFilter] = useState<string[]>([]);
-  const [wizardOpen, setWizardOpen] = useState(false);
 
   const toggleExpand = (id: string) => {
     setExpandedInterventions({
       ...expandedInterventions,
       [id]: !expandedInterventions[id],
+    });
+  };
+
+  const toggleComments = (id: string) => {
+    setShowComments({
+      ...showComments,
+      [id]: !showComments[id],
     });
   };
 
@@ -124,16 +130,14 @@ const Interventions = () => {
           </div>
           
           <div className="mt-4 md:mt-0 flex space-x-2">
-            <Sheet open={wizardOpen} onOpenChange={setWizardOpen}>
-              <SheetTrigger asChild>
-                <Button className="gap-2">
-                  <Plus size={18} /> Asistente de Intervención
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="right" className="sm:max-w-xl w-[90vw]">
-                <InterventionWizard onClose={() => setWizardOpen(false)} />
-              </SheetContent>
-            </Sheet>
+            <Button 
+              className="gap-2"
+              asChild
+            >
+              <Link to="/intervenciones/asistente">
+                <Plus size={18} /> Asistente de Intervención
+              </Link>
+            </Button>
             
             <Button 
               variant="outline"
@@ -302,11 +306,42 @@ const Interventions = () => {
                         </div>
                         
                         <div className="mb-4">
-                          <h4 className="font-semibold text-gray-800 mb-2">Observaciones:</h4>
+                          <h4 className="font-semibold text-gray-800 mb-2">Observaciones iniciales:</h4>
                           <p className="text-gray-700 bg-gray-50 p-3 rounded-md border border-gray-100">
                             {intervention.observations}
                           </p>
                         </div>
+
+                        <Collapsible
+                          open={showComments[intervention.id]}
+                          onOpenChange={() => toggleComments(intervention.id)}
+                          className="mt-4"
+                        >
+                          <CollapsibleTrigger asChild>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="w-full flex gap-2 justify-center"
+                            >
+                              <MessageSquare size={16} />
+                              {showComments[intervention.id] ? "Ocultar observaciones" : "Ver observaciones de seguimiento"}
+                              {showComments[intervention.id] ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                            </Button>
+                          </CollapsibleTrigger>
+                          <CollapsibleContent className="mt-4">
+                            <InterventionComments 
+                              interventionId={intervention.id} 
+                              initialComments={[
+                                {
+                                  id: "1",
+                                  author: "Ana Martínez",
+                                  date: new Date(2023, 3, 15, 10, 30),
+                                  text: "El estudiante mostró avances significativos después de aplicar esta intervención durante dos semanas. Recomiendo continuar con la misma estrategia."
+                                }
+                              ]}
+                            />
+                          </CollapsibleContent>
+                        </Collapsible>
                         
                         <div className="flex justify-between mt-4">
                           <Button variant="outline" size="sm" asChild>
