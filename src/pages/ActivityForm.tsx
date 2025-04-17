@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import Navbar from "@/components/Navbar";
@@ -59,11 +58,20 @@ const ActivityForm = ({ isIntervention = false }: ActivityFormProps) => {
     description: "",
     durationMin: 5,
     durationMax: 10,
-    durationUnit: "minutos" as "minutos" | "horas" // Fix: type assertion to allowed values
+    durationUnit: "minutos" as "minutos" | "horas"
   });
   const [currentStepIndex, setCurrentStepIndex] = useState(-1);
 
-  // Load activity data if editing
+  const handleDurationUnitChange = (value: string) => {
+    setCurrentStep(prev => {
+      const durationUnit = value === "horas" ? "horas" : "minutos";
+      return {
+        ...prev,
+        durationUnit
+      };
+    });
+  };
+
   useEffect(() => {
     if (isEditing) {
       const existingActivity = activities.find(a => a.id === id);
@@ -141,7 +149,7 @@ const ActivityForm = ({ isIntervention = false }: ActivityFormProps) => {
     if (step) {
       setCurrentStep({
         ...step,
-        durationUnit: step.durationUnit as "minutos" | "horas" // Fix: ensure proper type
+        durationUnit: step.durationUnit as "minutos" | "horas"
       });
       setCurrentStepIndex(index || -1);
     } else {
@@ -171,16 +179,14 @@ const ActivityForm = ({ isIntervention = false }: ActivityFormProps) => {
         const newSteps = [...prev.development.steps];
         
         if (currentStepIndex >= 0) {
-          // Edit existing step
           newSteps[currentStepIndex] = {
             ...currentStep,
-            durationUnit: currentStep.durationUnit as "minutos" | "horas" // Fix: ensure proper type
+            durationUnit: currentStep.durationUnit as "minutos" | "horas"
           };
         } else {
-          // Add new step
           newSteps.push({
             ...currentStep,
-            durationUnit: currentStep.durationUnit as "minutos" | "horas" // Fix: ensure proper type
+            durationUnit: currentStep.durationUnit as "minutos" | "horas"
           });
         }
         
@@ -213,7 +219,6 @@ const ActivityForm = ({ isIntervention = false }: ActivityFormProps) => {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validation
     if (!activity.name.trim() || !activity.objective.trim() || 
         activity.barriers.length === 0 || activity.learningStyles.length === 0 ||
         !activity.development.description.trim() || activity.development.steps.length === 0) {
@@ -226,10 +231,8 @@ const ActivityForm = ({ isIntervention = false }: ActivityFormProps) => {
     }
     
     if (isEditing) {
-      // Update existing activity
       setActivities(prev => prev.map(a => a.id === id ? activity : a));
     } else {
-      // Add new activity
       setActivities(prev => [...prev, activity]);
     }
     
@@ -505,7 +508,7 @@ const ActivityForm = ({ isIntervention = false }: ActivityFormProps) => {
                         id="durationUnit"
                         name="durationUnit"
                         value={currentStep.durationUnit}
-                        onChange={(e) => setCurrentStep(prev => ({ ...prev, durationUnit: e.target.value }))}
+                        onChange={(e) => handleDurationUnitChange(e.target.value)}
                         className="w-full mt-1 p-2 border border-gray-300 rounded-md"
                       >
                         <option value="minutos">Minutos</option>
