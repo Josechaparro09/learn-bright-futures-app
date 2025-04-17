@@ -11,6 +11,7 @@ import LearningStyles from "./pages/LearningStyles";
 import Activities from "./pages/Activities";
 import Interventions from "./pages/Interventions";
 import ActivityForm from "./pages/ActivityForm";
+import InterventionForm from "./pages/InterventionForm";
 
 const queryClient = new QueryClient();
 
@@ -28,7 +29,8 @@ const App = () => (
           <Route path="/actividades/nueva" element={<ActivityForm />} />
           <Route path="/actividades/editar/:id" element={<ActivityForm />} />
           <Route path="/intervenciones" element={<Interventions />} />
-          <Route path="/intervenciones/nueva" element={<ActivityForm isIntervention={true} />} />
+          <Route path="/intervenciones/nueva" element={<InterventionForm />} />
+          <Route path="/intervenciones/editar/:id" element={<InterventionForm />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>

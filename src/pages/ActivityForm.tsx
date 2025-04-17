@@ -59,7 +59,7 @@ const ActivityForm = ({ isIntervention = false }: ActivityFormProps) => {
     description: "",
     durationMin: 5,
     durationMax: 10,
-    durationUnit: "minutos"
+    durationUnit: "minutos" as "minutos" | "horas" // Fix: type assertion to allowed values
   });
   const [currentStepIndex, setCurrentStepIndex] = useState(-1);
 
@@ -139,7 +139,10 @@ const ActivityForm = ({ isIntervention = false }: ActivityFormProps) => {
 
   const openStepSheet = (step?: typeof activity.development.steps[0], index?: number) => {
     if (step) {
-      setCurrentStep(step);
+      setCurrentStep({
+        ...step,
+        durationUnit: step.durationUnit as "minutos" | "horas" // Fix: ensure proper type
+      });
       setCurrentStepIndex(index || -1);
     } else {
       setCurrentStep({
@@ -169,10 +172,16 @@ const ActivityForm = ({ isIntervention = false }: ActivityFormProps) => {
         
         if (currentStepIndex >= 0) {
           // Edit existing step
-          newSteps[currentStepIndex] = currentStep;
+          newSteps[currentStepIndex] = {
+            ...currentStep,
+            durationUnit: currentStep.durationUnit as "minutos" | "horas" // Fix: ensure proper type
+          };
         } else {
           // Add new step
-          newSteps.push(currentStep);
+          newSteps.push({
+            ...currentStep,
+            durationUnit: currentStep.durationUnit as "minutos" | "horas" // Fix: ensure proper type
+          });
         }
         
         return {

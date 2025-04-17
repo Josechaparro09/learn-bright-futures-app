@@ -2,9 +2,11 @@
 import { useState } from "react";
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import InterventionWizard from "@/components/InterventionWizard";
 import { 
   Calendar, ChevronDown, ChevronUp, Plus, Search, User, 
-  BookOpen, Clock, ClipboardList, Filter 
+  BookOpen, Filter, ClipboardList 
 } from "lucide-react";
 import { 
   interventions as initialInterventions, 
@@ -22,6 +24,7 @@ const Interventions = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [teacherFilter, setTeacherFilter] = useState<string[]>([]);
   const [activityFilter, setActivityFilter] = useState<string[]>([]);
+  const [wizardOpen, setWizardOpen] = useState(false);
 
   const toggleExpand = (id: string) => {
     setExpandedInterventions({
@@ -119,14 +122,29 @@ const Interventions = () => {
               Gestiona y realiza seguimiento de las intervenciones personalizadas
             </p>
           </div>
-          <Button 
-            asChild
-            className="mt-4 md:mt-0 gap-2"
-          >
-            <Link to="/intervenciones/nueva">
-              <Plus size={18} /> Nueva Intervención
-            </Link>
-          </Button>
+          
+          <div className="mt-4 md:mt-0 flex space-x-2">
+            <Sheet open={wizardOpen} onOpenChange={setWizardOpen}>
+              <SheetTrigger asChild>
+                <Button className="gap-2">
+                  <Plus size={18} /> Asistente de Intervención
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="right" className="sm:max-w-xl w-[90vw]">
+                <InterventionWizard onClose={() => setWizardOpen(false)} />
+              </SheetContent>
+            </Sheet>
+            
+            <Button 
+              variant="outline"
+              asChild
+              className="gap-2"
+            >
+              <Link to="/intervenciones/nueva">
+                <Plus size={18} /> Creación Manual
+              </Link>
+            </Button>
+          </div>
         </div>
 
         <div className="bg-white rounded-lg shadow-md p-6 mb-8">
