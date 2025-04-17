@@ -7,17 +7,124 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Checkbox } from "@/components/ui/checkbox";
 import { SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { useToast } from "@/components/ui/use-toast";
-import { barriers, learningStyles, activities, Activity, Barrier, LearningStyle } from "@/data/sampleData";
+import { supabase } from "@/integrations/supabase/client";
+
+interface Barrier {
+  id: string;
+  name: string;
+  description: string;
+}
+
+interface LearningStyle {
+  id: string;
+  name: string;
+  description: string;
+}
+
+interface Activity {
+  id: string;
+  name: string;
+  objective: string;
+  materials: string[];
+  development: {
+    description: string;
+    steps: {
+      id: string;
+      description: string;
+      durationMin: number;
+      durationMax: number;
+      durationUnit: string;
+    }[];
+  };
+  barriers: string[];
+  learningStyles: string[];
+}
 
 const InterventionWizard = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  
+  // Data states
+  const [barriers, setBarriers] = useState<Barrier[]>([]);
+  const [learningStyles, setLearningStyles] = useState<LearningStyle[]>([]);
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   
   // Selection states
   const [selectedBarrier, setSelectedBarrier] = useState<string | null>(null);
   const [selectedStyles, setSelectedStyles] = useState<string[]>([]);
   const [filteredActivities, setFilteredActivities] = useState<Activity[]>([]);
   const [selectedActivity, setSelectedActivity] = useState<string | null>(null);
+  
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsLoading(true);
+      try {
+        // Fetch barriers
+        const { data: barriersData, error: barriersError } = await supabase
+          .from('barriers')
+          .select('id, name, description');
+        
+        if (barriersError) throw barriersError;
+        
+        // Fetch learning styles
+        const { data: stylesData, error: stylesError } = await supabase
+          .from('learning_styles')
+          .select('id, name, description');
+        
+        if (stylesError) throw stylesError;
+        
+        // Fetch activities with their barriers and learning styles
+        const { data: activitiesData, error: activitiesError } = await supabase
+          .from('activities')
+          .select('id, name, objective, materials, development');
+        
+        if (activitiesError) throw activitiesError;
+        
+        // For each activity, fetch its barriers
+        const activitiesWithRelations = await Promise.all(
+          activitiesData.map(async (activity) => {
+            // Get barriers for this activity
+            const { data: activityBarriers, error: barrierError } = await supabase
+              .from('activity_barriers')
+              .select('barrier_id')
+              .eq('activity_id', activity.id);
+            
+            if (barrierError) throw barrierError;
+            
+            // Get learning styles for this activity
+            const { data: activityStyles, error: styleError } = await supabase
+              .from('activity_learning_styles')
+              .select('learning_style_id')
+              .eq('activity_id', activity.id);
+            
+            if (styleError) throw styleError;
+            
+            return {
+              ...activity,
+              barriers: activityBarriers.map(ab => ab.barrier_id),
+              learningStyles: activityStyles.map(als => als.learning_style_id)
+            };
+          })
+        );
+        
+        setBarriers(barriersData);
+        setLearningStyles(stylesData);
+        setActivities(activitiesWithRelations);
+      } catch (error) {
+        console.error('Error fetching data:', error);
+        toast({
+          title: "Error",
+          description: "No se pudieron cargar los datos necesarios",
+          variant: "destructive"
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchData();
+  }, [toast]);
   
   // Filter activities when selections change
   useEffect(() => {
@@ -40,7 +147,7 @@ const InterventionWizard = () => {
     });
     
     setFilteredActivities(filtered);
-  }, [selectedBarrier, selectedStyles]);
+  }, [selectedBarrier, selectedStyles, activities]);
   
   // Toggle a learning style
   const toggleStyle = (styleId: string) => {
@@ -82,6 +189,14 @@ const InterventionWizard = () => {
     navigate(`/intervenciones/nueva?activity=${selectedActivity}&barrier=${selectedBarrier}&styles=${selectedStyles.join(",")}`);
   };
   
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+  
   return (
     <div className="p-4">
       <SheetHeader className="text-left mb-6">
@@ -101,7 +216,7 @@ const InterventionWizard = () => {
             onValueChange={(value) => setSelectedBarrier(value)}
             className="space-y-3"
           >
-            {barriers.map((barrier: Barrier) => (
+            {barriers.map((barrier) => (
               <div 
                 key={barrier.id} 
                 className={`flex items-center space-x-2 p-3 border rounded-md hover:bg-gray-50 cursor-pointer ${
@@ -135,7 +250,7 @@ const InterventionWizard = () => {
             </div>
           ) : (
             <div className="space-y-3">
-              {relevantStyles.map((style: LearningStyle) => (
+              {relevantStyles.map((style) => (
                 <div 
                   key={style.id} 
                   className={`flex items-center space-x-2 p-3 border rounded-md hover:bg-gray-50 cursor-pointer ${
@@ -178,7 +293,7 @@ const InterventionWizard = () => {
               onValueChange={(value) => setSelectedActivity(value)}
               className="space-y-3"
             >
-              {filteredActivities.map((activity: Activity) => (
+              {filteredActivities.map((activity) => (
                 <div 
                   key={activity.id} 
                   className={`p-4 border rounded-md cursor-pointer hover:bg-gray-50 transition-colors ${

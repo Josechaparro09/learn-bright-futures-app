@@ -1,17 +1,26 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { Plus, Edit, Trash2, X, Save, Search } from "lucide-react";
-import { learningStyles as initialStyles, LearningStyle } from "@/data/sampleData";
 import { useToast } from "@/components/ui/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/context/AuthContext";
+
+interface LearningStyle {
+  id: string;
+  name: string;
+  description: string;
+}
 
 const LearningStyles = () => {
   const { toast } = useToast();
-  const [styles, setStyles] = useState<LearningStyle[]>(initialStyles);
+  const { user } = useAuth();
+  const [styles, setStyles] = useState<LearningStyle[]>([]);
   const [isAdding, setIsAdding] = useState(false);
   const [isEditing, setIsEditing] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
   const [newStyle, setNewStyle] = useState<Omit<LearningStyle, "id">>({
     name: "",
     description: "",
@@ -22,7 +31,33 @@ const LearningStyles = () => {
     description: "",
   });
 
-  const handleAddSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    fetchLearningStyles();
+  }, []);
+
+  const fetchLearningStyles = async () => {
+    try {
+      setIsLoading(true);
+      const { data, error } = await supabase
+        .from("learning_styles")
+        .select("*")
+        .order("name");
+
+      if (error) throw error;
+      if (data) setStyles(data);
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar los estilos de aprendizaje",
+        variant: "destructive",
+      });
+      console.error("Error fetching learning styles:", error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newStyle.name || !newStyle.description) {
       toast({
@@ -33,17 +68,34 @@ const LearningStyles = () => {
       return;
     }
 
-    const id = `${styles.length + 1}`;
-    setStyles([...styles, { ...newStyle, id }]);
-    setNewStyle({ name: "", description: "" });
-    setIsAdding(false);
-    toast({
-      title: "Estilo de aprendizaje agregado",
-      description: `Se ha agregado "${newStyle.name}" correctamente.`,
-    });
+    try {
+      const { data, error } = await supabase
+        .from("learning_styles")
+        .insert([
+          { ...newStyle, created_by: user?.id }
+        ])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setStyles([...styles, data]);
+      setNewStyle({ name: "", description: "" });
+      setIsAdding(false);
+      toast({
+        title: "Estilo de aprendizaje agregado",
+        description: `Se ha agregado "${newStyle.name}" correctamente.`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Error al agregar el estilo de aprendizaje",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleEditSubmit = (e: React.FormEvent) => {
+  const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editStyle.name || !editStyle.description) {
       toast({
@@ -54,25 +106,58 @@ const LearningStyles = () => {
       return;
     }
 
-    setStyles(
-      styles.map((style) =>
-        style.id === isEditing ? editStyle : style
-      )
-    );
-    setIsEditing(null);
-    toast({
-      title: "Estilo de aprendizaje actualizado",
-      description: `Se ha actualizado "${editStyle.name}" correctamente.`,
-    });
+    try {
+      const { error } = await supabase
+        .from("learning_styles")
+        .update({
+          name: editStyle.name,
+          description: editStyle.description
+        })
+        .eq("id", isEditing);
+
+      if (error) throw error;
+
+      setStyles(
+        styles.map((style) =>
+          style.id === isEditing ? editStyle : style
+        )
+      );
+      setIsEditing(null);
+      toast({
+        title: "Estilo de aprendizaje actualizado",
+        description: `Se ha actualizado "${editStyle.name}" correctamente.`,
+      });
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Error al actualizar el estilo de aprendizaje",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleDelete = (id: string, name: string) => {
+  const handleDelete = async (id: string, name: string) => {
     if (window.confirm(`¿Estás seguro de eliminar el estilo de aprendizaje "${name}"?`)) {
-      setStyles(styles.filter((style) => style.id !== id));
-      toast({
-        title: "Estilo de aprendizaje eliminado",
-        description: `Se ha eliminado "${name}" correctamente.`,
-      });
+      try {
+        const { error } = await supabase
+          .from("learning_styles")
+          .delete()
+          .eq("id", id);
+
+        if (error) throw error;
+
+        setStyles(styles.filter((style) => style.id !== id));
+        toast({
+          title: "Estilo de aprendizaje eliminado",
+          description: `Se ha eliminado "${name}" correctamente.`,
+        });
+      } catch (error: any) {
+        toast({
+          title: "Error",
+          description: error.message || "Error al eliminar el estilo de aprendizaje",
+          variant: "destructive",
+        });
+      }
     }
   };
 
@@ -139,59 +224,9 @@ const LearningStyles = () => {
             />
           </div>
 
-          {isAdding && (
-            <form onSubmit={handleAddSubmit} className="mb-8 bg-blue-50 p-4 rounded-lg border border-blue-100">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-semibold">Agregar Nuevo Estilo de Aprendizaje</h3>
-                <Button variant="ghost" size="sm" onClick={cancelAction} className="h-8 w-8 p-0">
-                  <X size={18} />
-                </Button>
-              </div>
-              
-              <div className="space-y-4">
-                <div>
-                  <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
-                    Nombre del Estilo
-                  </label>
-                  <input
-                    id="name"
-                    type="text"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary/70"
-                    value={newStyle.name}
-                    onChange={(e) => setNewStyle({ ...newStyle, name: e.target.value })}
-                    placeholder="Ej. Verbal-Lingüístico"
-                  />
-                </div>
-                
-                <div>
-                  <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
-                    Descripción
-                  </label>
-                  <textarea
-                    id="description"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary/70"
-                    rows={3}
-                    value={newStyle.description}
-                    onChange={(e) => setNewStyle({ ...newStyle, description: e.target.value })}
-                    placeholder="Describe brevemente este estilo de aprendizaje"
-                  />
-                </div>
-                
-                <div className="flex justify-end gap-2">
-                  <Button type="button" variant="outline" onClick={cancelAction}>
-                    Cancelar
-                  </Button>
-                  <Button type="submit">
-                    <Save size={18} className="mr-2" /> Guardar
-                  </Button>
-                </div>
-              </div>
-            </form>
-          )}
-
-          {filteredStyles.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-gray-500">No se encontraron estilos de aprendizaje.</p>
+          {isLoading ? (
+            <div className="flex justify-center items-center py-12">
+              <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">

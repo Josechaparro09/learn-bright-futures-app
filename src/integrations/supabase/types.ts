@@ -9,7 +9,344 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      activities: {
+        Row: {
+          created_at: string
+          created_by: string
+          development: Json
+          id: string
+          materials: Json
+          name: string
+          objective: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          development: Json
+          id?: string
+          materials?: Json
+          name: string
+          objective: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          development?: Json
+          id?: string
+          materials?: Json
+          name?: string
+          objective?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      activity_barriers: {
+        Row: {
+          activity_id: string
+          barrier_id: string
+        }
+        Insert: {
+          activity_id: string
+          barrier_id: string
+        }
+        Update: {
+          activity_id?: string
+          barrier_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activity_barriers_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "activities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activity_barriers_barrier_id_fkey"
+            columns: ["barrier_id"]
+            isOneToOne: false
+            referencedRelation: "barriers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      activity_learning_styles: {
+        Row: {
+          activity_id: string
+          learning_style_id: string
+        }
+        Insert: {
+          activity_id: string
+          learning_style_id: string
+        }
+        Update: {
+          activity_id?: string
+          learning_style_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activity_learning_styles_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "activities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activity_learning_styles_learning_style_id_fkey"
+            columns: ["learning_style_id"]
+            isOneToOne: false
+            referencedRelation: "learning_styles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      barriers: {
+        Row: {
+          created_at: string
+          created_by: string
+          description: string
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          description: string
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          description?: string
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      intervention_barriers: {
+        Row: {
+          barrier_id: string
+          intervention_id: string
+        }
+        Insert: {
+          barrier_id: string
+          intervention_id: string
+        }
+        Update: {
+          barrier_id?: string
+          intervention_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intervention_barriers_barrier_id_fkey"
+            columns: ["barrier_id"]
+            isOneToOne: false
+            referencedRelation: "barriers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "intervention_barriers_intervention_id_fkey"
+            columns: ["intervention_id"]
+            isOneToOne: false
+            referencedRelation: "interventions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      intervention_comments: {
+        Row: {
+          author_id: string
+          content: string
+          created_at: string
+          id: string
+          intervention_id: string
+        }
+        Insert: {
+          author_id: string
+          content: string
+          created_at?: string
+          id?: string
+          intervention_id: string
+        }
+        Update: {
+          author_id?: string
+          content?: string
+          created_at?: string
+          id?: string
+          intervention_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intervention_comments_intervention_id_fkey"
+            columns: ["intervention_id"]
+            isOneToOne: false
+            referencedRelation: "interventions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      intervention_learning_styles: {
+        Row: {
+          intervention_id: string
+          learning_style_id: string
+        }
+        Insert: {
+          intervention_id: string
+          learning_style_id: string
+        }
+        Update: {
+          intervention_id?: string
+          learning_style_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intervention_learning_styles_intervention_id_fkey"
+            columns: ["intervention_id"]
+            isOneToOne: false
+            referencedRelation: "interventions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "intervention_learning_styles_learning_style_id_fkey"
+            columns: ["learning_style_id"]
+            isOneToOne: false
+            referencedRelation: "learning_styles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      interventions: {
+        Row: {
+          activity_id: string
+          created_at: string
+          date: string
+          id: string
+          observations: string | null
+          student_id: string
+          teacher_id: string
+          updated_at: string
+        }
+        Insert: {
+          activity_id: string
+          created_at?: string
+          date?: string
+          id?: string
+          observations?: string | null
+          student_id: string
+          teacher_id: string
+          updated_at?: string
+        }
+        Update: {
+          activity_id?: string
+          created_at?: string
+          date?: string
+          id?: string
+          observations?: string | null
+          student_id?: string
+          teacher_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "interventions_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "activities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "interventions_student_id_fkey"
+            columns: ["student_id"]
+            isOneToOne: false
+            referencedRelation: "students"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      learning_styles: {
+        Row: {
+          created_at: string
+          created_by: string
+          description: string
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          description: string
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          description?: string
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          name: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id: string
+          name?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          name?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      students: {
+        Row: {
+          created_at: string
+          created_by: string
+          grade: string
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          grade: string
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          grade?: string
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
