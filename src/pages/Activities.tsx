@@ -1,18 +1,156 @@
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { ChevronDown, ChevronUp, Clock, Plus, Search, Filter, ClipboardList } from "lucide-react";
-import { Activity, activities as initialActivities, barriers, learningStyles } from "@/data/sampleData";
+import { Activity } from "@/data/sampleData";
 import { Link } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/components/ui/use-toast";
+
+interface ActivityFromDB {
+  id: string;
+  name: string;
+  objective: string;
+  materials: string | string[];
+  development: string | {
+    description: string;
+    steps: Array<{
+      id: string;
+      description: string;
+      durationMin: number;
+      durationMax: number;
+      durationUnit: string;
+    }>;
+  };
+}
+
+interface Barrier {
+  id: string;
+  name: string;
+}
+
+interface LearningStyle {
+  id: string;
+  name: string;
+}
 
 const Activities = () => {
-  const [activities, setActivities] = useState<Activity[]>(initialActivities);
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [barriers, setBarriers] = useState<Barrier[]>([]);
+  const [learningStyles, setLearningStyles] = useState<LearningStyle[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [barrierFilter, setBarrierFilter] = useState<string[]>([]);
   const [styleFilter, setStyleFilter] = useState<string[]>([]);
   const [expandedActivities, setExpandedActivities] = useState<Record<string, boolean>>({});
   const [showFilters, setShowFilters] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const { toast } = useToast();
+
+  // Cargar datos desde Supabase
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsLoading(true);
+      try {
+        // Obtener barreras
+        const { data: barriersData, error: barriersError } = await supabase
+          .from('barriers')
+          .select('*');
+        
+        if (barriersError) throw barriersError;
+        setBarriers(barriersData);
+
+        // Obtener estilos de aprendizaje
+        const { data: stylesData, error: stylesError } = await supabase
+          .from('learning_styles')
+          .select('*');
+        
+        if (stylesError) throw stylesError;
+        setLearningStyles(stylesData);
+
+        // Obtener actividades
+        const { data: activitiesData, error: activitiesError } = await supabase
+          .from('activities')
+          .select('*');
+
+        if (activitiesError) throw activitiesError;
+
+        // Para cada actividad, obtener sus barreras y estilos
+        const activitiesWithRelations = await Promise.all(
+          activitiesData.map(async (activity: ActivityFromDB) => {
+            // Obtener barreras de la actividad
+            const { data: activityBarriers, error: barriersError } = await supabase
+              .from('activity_barriers')
+              .select('barrier_id')
+              .eq('activity_id', activity.id);
+
+            if (barriersError) throw barriersError;
+
+            // Obtener estilos de aprendizaje de la actividad
+            const { data: activityStyles, error: stylesError } = await supabase
+              .from('activity_learning_styles')
+              .select('learning_style_id')
+              .eq('activity_id', activity.id);
+
+            if (stylesError) throw stylesError;
+
+            // Convertir materiales de JSON a array si es necesario
+            let materials: string[] = [];
+            if (Array.isArray(activity.materials)) {
+              materials = activity.materials;
+            } else if (typeof activity.materials === 'string') {
+              try {
+                const parsedMaterials = JSON.parse(activity.materials);
+                materials = Array.isArray(parsedMaterials) ? parsedMaterials : [];
+              } catch (e) {
+                console.error('Error parsing materials JSON', e);
+                materials = [];
+              }
+            }
+
+            // Convertir development de JSON a objeto si es necesario
+            let development = {
+              description: '',
+              steps: []
+            };
+            if (typeof activity.development === 'object') {
+              development = activity.development as typeof development;
+            } else if (typeof activity.development === 'string') {
+              try {
+                const parsedDevelopment = JSON.parse(activity.development);
+                development = {
+                  description: parsedDevelopment.description || '',
+                  steps: Array.isArray(parsedDevelopment.steps) ? parsedDevelopment.steps : []
+                };
+              } catch (e) {
+                console.error('Error parsing development JSON', e);
+              }
+            }
+
+            return {
+              ...activity,
+              materials,
+              development,
+              barriers: activityBarriers.map(ab => ab.barrier_id),
+              learningStyles: activityStyles.map(als => als.learning_style_id)
+            };
+          })
+        );
+
+        setActivities(activitiesWithRelations);
+      } catch (error) {
+        console.error('Error fetching data:', error);
+        toast({
+          title: "Error",
+          description: "No se pudieron cargar los datos",
+          variant: "destructive"
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [toast]);
 
   const toggleExpand = (id: string) => {
     setExpandedActivities({
@@ -64,14 +202,14 @@ const Activities = () => {
   });
 
   // Función para obtener nombre de barrera por ID
-  const getBarrierName = (id: string) => {
-    const barrier = barriers.find((b) => b.id === id);
+  const getBarrierName = (id: string): string => {
+    const barrier = barriers.find(b => b.id === id);
     return barrier ? barrier.name : "Desconocido";
   };
 
   // Función para obtener nombre de estilo por ID
-  const getStyleName = (id: string) => {
-    const style = learningStyles.find((s) => s.id === id);
+  const getStyleName = (id: string): string => {
+    const style = learningStyles.find(s => s.id === id);
     return style ? style.name : "Desconocido";
   };
 
@@ -87,6 +225,19 @@ const Activities = () => {
     // @ts-ignore
     return styleColors[styleName] || "bg-gray-100 text-gray-800";
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex flex-col bg-gray-50">
+        <Navbar />
+        <div className="container mx-auto px-4 py-8">
+          <div className="flex justify-center items-center min-h-[400px]">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">

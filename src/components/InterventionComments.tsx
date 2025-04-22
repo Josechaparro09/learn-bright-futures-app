@@ -1,30 +1,78 @@
-
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/components/ui/use-toast';
-import { MessageSquare, Send, User } from 'lucide-react';
+import { MessageSquare, Send, User, Loader2 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 
 // Interface for comments
 interface Comment {
   id: string;
-  author: string;
-  date: Date;
-  text: string;
+  author_id: string;
+  author_name: string;
+  created_at: string;
+  content: string;
 }
 
 interface InterventionCommentsProps {
   interventionId: string;
-  initialComments?: Comment[];
 }
 
-const InterventionComments = ({ interventionId, initialComments = [] }: InterventionCommentsProps) => {
+const InterventionComments = ({ interventionId }: InterventionCommentsProps) => {
   const { toast } = useToast();
-  const [comments, setComments] = useState<Comment[]>(initialComments);
+  const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const handleSubmitComment = () => {
+  // Cargar comentarios al montar el componente
+  useEffect(() => {
+    fetchComments();
+  }, [interventionId]);
+
+  const fetchComments = async () => {
+    setIsLoading(true);
+    try {
+      // Obtener comentarios de la intervención
+      const { data: commentsData, error: commentsError } = await supabase
+        .from('intervention_comments')
+        .select('*')
+        .eq('intervention_id', interventionId)
+        .order('created_at', { ascending: true });
+      
+      if (commentsError) throw commentsError;
+
+      // Obtener los perfiles de los autores de los comentarios
+      const processedComments = await Promise.all((commentsData || []).map(async (comment) => {
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('name, email')
+          .eq('id', comment.author_id)
+          .single();
+        
+        return {
+          id: comment.id,
+          author_id: comment.author_id,
+          author_name: profileData?.name || profileData?.email || 'Usuario desconocido',
+          created_at: comment.created_at,
+          content: comment.content
+        };
+      }));
+
+      setComments(processedComments);
+    } catch (error) {
+      console.error('Error al cargar comentarios:', error);
+      toast({
+        title: "Error",
+        description: "No se pudieron cargar los comentarios",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSubmitComment = async () => {
     if (!newComment.trim()) {
       toast({
         title: "Error",
@@ -36,28 +84,63 @@ const InterventionComments = ({ interventionId, initialComments = [] }: Interven
 
     setIsSubmitting(true);
 
-    // In a real app, you'd send this to your backend
-    // Simulating an API call with a timeout
-    setTimeout(() => {
-      const comment: Comment = {
-        id: Date.now().toString(),
-        author: "Profesor Actual", // In a real app, get the current user's name
-        date: new Date(),
-        text: newComment.trim()
+    try {
+      // Obtener el ID del usuario actual
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        throw new Error('No se pudo identificar al usuario actual');
+      }
+
+      // Guardar comentario en la base de datos
+      const { data: commentData, error: commentError } = await supabase
+        .from('intervention_comments')
+        .insert([{
+          intervention_id: interventionId,
+          author_id: user.id,
+          content: newComment.trim()
+        }])
+        .select()
+        .single();
+      
+      if (commentError) throw commentError;
+
+      // Obtener perfil del usuario para mostrar el nombre
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('name, email')
+        .eq('id', user.id)
+        .single();
+
+      const newCommentObj: Comment = {
+        id: commentData.id,
+        author_id: user.id,
+        author_name: profileData?.name || profileData?.email || 'Tú',
+        created_at: commentData.created_at,
+        content: commentData.content
       };
 
-      setComments([...comments, comment]);
+      setComments([...comments, newCommentObj]);
       setNewComment('');
-      setIsSubmitting(false);
       
       toast({
         title: "Comentario agregado",
         description: "Tu observación ha sido añadida correctamente."
       });
-    }, 500);
+    } catch (error: any) {
+      console.error('Error al agregar comentario:', error);
+      toast({
+        title: "Error",
+        description: error.message || "No se pudo agregar el comentario",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const formatDate = (date: Date) => {
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
     return new Intl.DateTimeFormat("es-ES", {
       day: "2-digit",
       month: "long",
@@ -66,6 +149,15 @@ const InterventionComments = ({ interventionId, initialComments = [] }: Interven
       minute: "2-digit"
     }).format(date);
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center py-8">
+        <Loader2 className="h-6 w-6 text-primary animate-spin" />
+        <span className="ml-2">Cargando comentarios...</span>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -85,11 +177,11 @@ const InterventionComments = ({ interventionId, initialComments = [] }: Interven
               <div className="flex justify-between items-start mb-2">
                 <div className="flex items-center gap-2">
                   <User size={16} className="text-gray-500" />
-                  <span className="font-medium">{comment.author}</span>
+                  <span className="font-medium">{comment.author_name}</span>
                 </div>
-                <span className="text-xs text-gray-500">{formatDate(comment.date)}</span>
+                <span className="text-xs text-gray-500">{formatDate(comment.created_at)}</span>
               </div>
-              <p className="text-gray-700 whitespace-pre-wrap">{comment.text}</p>
+              <p className="text-gray-700 whitespace-pre-wrap">{comment.content}</p>
             </div>
           ))}
         </div>
@@ -110,7 +202,15 @@ const InterventionComments = ({ interventionId, initialComments = [] }: Interven
             size="sm" 
             className="gap-1"
           >
-            <Send size={14} /> Añadir observación
+            {isSubmitting ? (
+              <>
+                <Loader2 size={14} className="animate-spin" /> Enviando...
+              </>
+            ) : (
+              <>
+                <Send size={14} /> Añadir observación
+              </>
+            )}
           </Button>
         </div>
       </div>

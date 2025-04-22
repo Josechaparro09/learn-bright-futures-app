@@ -1,7 +1,6 @@
-
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Menu, X, BookOpen, Activity, Users, BarChart2, Layers } from "lucide-react";
+import { Menu, X, BookOpen, Activity, Users, BarChart2, Layers, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -15,6 +14,12 @@ const Navbar = () => {
     { text: "Barreras de Aprendizaje", href: "/barreras", icon: <BarChart2 className="w-5 h-5 mr-2" /> },
     { text: "Estilos de Aprendizaje", href: "/estilos", icon: <Activity className="w-5 h-5 mr-2" /> },
     { text: "Actividades", href: "/actividades", icon: <Layers className="w-5 h-5 mr-2" /> },
+    { 
+      text: "Asistente IA", 
+      href: "/actividades/asistente", 
+      icon: <Sparkles className="w-5 h-5 mr-2" />,
+      highlight: true
+    },
     { text: "Intervenciones", href: "/intervenciones", icon: <Users className="w-5 h-5 mr-2" /> },
   ];
 
@@ -35,7 +40,12 @@ const Navbar = () => {
               <Link
                 key={item.href}
                 to={item.href}
-                className="flex items-center px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-primary/10 hover:text-primary transition-colors"
+                className={cn(
+                  "flex items-center px-3 py-2 rounded-md text-sm font-medium transition-colors",
+                  item.highlight 
+                    ? "bg-primary/10 text-primary hover:bg-primary/20" 
+                    : "text-gray-700 hover:bg-primary/10 hover:text-primary"
+                )}
               >
                 {item.icon}
                 {item.text}
@@ -64,7 +74,12 @@ const Navbar = () => {
             <Link
               key={item.href}
               to={item.href}
-              className="flex items-center px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:bg-primary/10 hover:text-primary"
+              className={cn(
+                "flex items-center px-3 py-2 rounded-md text-base font-medium",
+                item.highlight 
+                  ? "bg-primary/10 text-primary hover:bg-primary/20" 
+                  : "text-gray-700 hover:bg-primary/10 hover:text-primary"
+              )}
               onClick={() => setIsMenuOpen(false)}
             >
               {item.icon}

@@ -1,29 +1,208 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import InterventionComments from "@/components/InterventionComments";
 import { 
   Calendar, ChevronDown, ChevronUp, Plus, Search, User, 
-  BookOpen, Filter, ClipboardList, MessageSquare 
+  BookOpen, Filter, ClipboardList, MessageSquare, Loader2
 } from "lucide-react";
 import { 
-  interventions as initialInterventions, 
-  activities, 
-  barriers, 
-  learningStyles,
   Intervention 
 } from "@/data/sampleData";
 import { Link } from "react-router-dom";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/components/ui/use-toast";
+
+// Definir interfaces para los datos de Supabase
+interface SupabaseIntervention {
+  id: string;
+  teacher_id: string;
+  student_id: string;
+  activity_id: string;
+  observations?: string;
+  date: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+interface SupabaseProfile {
+  id: string;
+  name: string;
+  email: string;
+}
+
+interface SupabaseStudent {
+  id: string;
+  name: string;
+  grade: string;
+}
+
+interface SupabaseActivity {
+  id: string;
+  name: string;
+  objective: string;
+}
+
+interface SupabaseBarrier {
+  id: string;
+  name: string;
+}
+
+interface SupabaseLearningStyle {
+  id: string;
+  name: string;
+}
+
+// Interfaz para intervención completa
+interface CompleteIntervention {
+  id: string;
+  teacherName: string;
+  teacherId: string;
+  student: {
+    id: string;
+    name: string;
+    grade: string;
+  };
+  activity: string;
+  activityName: string;
+  barriers: string[];
+  learningStyles: string[];
+  date: Date;
+  observations: string;
+}
 
 const Interventions = () => {
-  const [interventions, setInterventions] = useState<Intervention[]>(initialInterventions);
+  const [interventions, setInterventions] = useState<CompleteIntervention[]>([]);
+  const [activities, setActivities] = useState<SupabaseActivity[]>([]);
+  const [barriers, setBarriers] = useState<SupabaseBarrier[]>([]);
+  const [learningStyles, setLearningStyles] = useState<SupabaseLearningStyle[]>([]);
+  const [teachers, setTeachers] = useState<SupabaseProfile[]>([]);
+  
   const [searchTerm, setSearchTerm] = useState("");
   const [expandedInterventions, setExpandedInterventions] = useState<Record<string, boolean>>({});
   const [showComments, setShowComments] = useState<Record<string, boolean>>({});
   const [showFilters, setShowFilters] = useState(false);
   const [teacherFilter, setTeacherFilter] = useState<string[]>([]);
   const [activityFilter, setActivityFilter] = useState<string[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  
+  const { toast } = useToast();
+
+  // Cargar datos
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsLoading(true);
+      try {
+        // 1. Obtener actividades
+        const { data: activityData, error: activityError } = await supabase
+          .from('activities')
+          .select('id, name, objective');
+        
+        if (activityError) throw activityError;
+        setActivities(activityData || []);
+
+        // 2. Obtener barreras
+        const { data: barrierData, error: barrierError } = await supabase
+          .from('barriers')
+          .select('id, name');
+        
+        if (barrierError) throw barrierError;
+        setBarriers(barrierData || []);
+
+        // 3. Obtener estilos de aprendizaje
+        const { data: styleData, error: styleError } = await supabase
+          .from('learning_styles')
+          .select('id, name');
+        
+        if (styleError) throw styleError;
+        setLearningStyles(styleData || []);
+
+        // 4. Obtener perfiles de profesores
+        const { data: profileData, error: profileError } = await supabase
+          .from('profiles')
+          .select('id, name, email');
+        
+        if (profileError) throw profileError;
+        setTeachers(profileData || []);
+
+        // 5. Obtener intervenciones
+        const { data: interventionData, error: interventionError } = await supabase
+          .from('interventions')
+          .select('*')
+          .order('created_at', { ascending: false });
+        
+        if (interventionError) throw interventionError;
+
+        // 6. Procesar cada intervención para obtener datos relacionados
+        const processedInterventions = await Promise.all((interventionData || []).map(async (intervention: SupabaseIntervention) => {
+          // Obtener estudiante
+          const { data: studentData, error: studentError } = await supabase
+            .from('students')
+            .select('*')
+            .eq('id', intervention.student_id)
+            .single();
+          
+          if (studentError && studentError.code !== 'PGRST116') {
+            console.error("Error al obtener estudiante:", studentError);
+          }
+
+          // Obtener barreras
+          const { data: interventionBarriers, error: interventionBarriersError } = await supabase
+            .from('intervention_barriers')
+            .select('barrier_id')
+            .eq('intervention_id', intervention.id);
+          
+          if (interventionBarriersError) {
+            console.error("Error al obtener barreras:", interventionBarriersError);
+          }
+
+          // Obtener estilos de aprendizaje
+          const { data: interventionStyles, error: interventionStylesError } = await supabase
+            .from('intervention_learning_styles')
+            .select('learning_style_id')
+            .eq('intervention_id', intervention.id);
+          
+          if (interventionStylesError) {
+            console.error("Error al obtener estilos:", interventionStylesError);
+          }
+
+          // Buscar el profesor
+          const teacher = profileData?.find(p => p.id === intervention.teacher_id);
+
+          return {
+            id: intervention.id,
+            teacherId: intervention.teacher_id,
+            teacherName: teacher?.name || teacher?.email || "Profesor desconocido",
+            student: {
+              id: studentData?.id || intervention.student_id,
+              name: studentData?.name || "Estudiante desconocido",
+              grade: studentData?.grade || ""
+            },
+            activity: intervention.activity_id,
+            activityName: activityData?.find(a => a.id === intervention.activity_id)?.name || "Actividad desconocida",
+            barriers: interventionBarriers?.map(b => b.barrier_id) || [],
+            learningStyles: interventionStyles?.map(s => s.learning_style_id) || [],
+            date: new Date(intervention.date),
+            observations: intervention.observations || ""
+          };
+        }));
+
+        setInterventions(processedInterventions);
+      } catch (error) {
+        console.error("Error al cargar datos:", error);
+        toast({
+          title: "Error",
+          description: "No se pudieron cargar las intervenciones",
+          variant: "destructive"
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [toast]);
 
   const toggleExpand = (id: string) => {
     setExpandedInterventions({
@@ -74,7 +253,7 @@ const Interventions = () => {
       searchTerm === "" ||
       intervention.teacherName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       intervention.student.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      getActivityName(intervention.activity).toLowerCase().includes(searchTerm.toLowerCase());
+      intervention.activityName.toLowerCase().includes(searchTerm.toLowerCase());
 
     // Filtro por profesor
     const matchesTeacher =
@@ -88,12 +267,6 @@ const Interventions = () => {
 
     return matchesSearch && matchesTeacher && matchesActivity;
   });
-
-  // Función para obtener nombre de una actividad por su ID
-  const getActivityName = (id: string) => {
-    const activity = activities.find((a) => a.id === id);
-    return activity ? activity.name : "Actividad desconocida";
-  };
 
   // Función para obtener nombre de barrera por ID
   const getBarrierName = (id: string) => {
@@ -115,6 +288,20 @@ const Interventions = () => {
       year: "numeric"
     }).format(date);
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex flex-col bg-gray-50">
+        <Navbar />
+        <div className="container mx-auto px-4 py-8 flex-grow flex items-center justify-center">
+          <div className="flex flex-col items-center">
+            <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
+            <p className="text-gray-600">Cargando intervenciones...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
@@ -198,7 +385,7 @@ const Interventions = () => {
 
                 <div>
                   <h3 className="text-sm font-semibold mb-2 text-gray-700">Actividades</h3>
-                  <div className="space-y-2">
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
                     {activities.map((activity) => (
                       <div key={activity.id} className="flex items-center">
                         <input
@@ -249,30 +436,44 @@ const Interventions = () => {
                         <Calendar className="h-5 w-5 text-gray-500 mr-2" />
                         <span className="text-sm text-gray-600">{formatDate(intervention.date)}</span>
                       </div>
-                      
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => toggleExpand(intervention.id)}
-                        className="h-8 w-8 p-0 ml-2"
-                        title={expandedInterventions[intervention.id] ? "Colapsar" : "Expandir"}
-                      >
-                        {expandedInterventions[intervention.id] ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                      </Button>
-                    </div>
-                    
-                    <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4">
-                      <h3 className="text-xl font-semibold text-gray-900 mb-2 md:mb-0">
-                        {getActivityName(intervention.activity)}
-                      </h3>
-                      
-                      <div className="flex items-center">
-                        <User className="h-5 w-5 text-gray-500 mr-2" />
-                        <span className="text-gray-700 font-medium">{intervention.student.name}</span>
-                        <span className="text-gray-500 text-sm ml-2">({intervention.student.grade})</span>
+                      <div className="flex items-center mt-2 md:mt-0">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => toggleExpand(intervention.id)}
+                          className="gap-1"
+                        >
+                          {expandedInterventions[intervention.id] ? "Colapsar" : "Detalles"}
+                          {expandedInterventions[intervention.id] ? (
+                            <ChevronUp size={16} />
+                          ) : (
+                            <ChevronDown size={16} />
+                          )}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => toggleComments(intervention.id)}
+                          className="gap-1"
+                        >
+                          Comentarios <MessageSquare size={16} />
+                        </Button>
                       </div>
                     </div>
-                    
+
+                    <div className="mb-4">
+                      <h3 className="text-xl font-semibold">{intervention.student.name}</h3>
+                      <div className="text-sm text-gray-600 flex items-center mt-1">
+                        <User size={16} className="mr-1" />
+                        {intervention.teacherName} | <BookOpen size={16} className="mx-1" /> {intervention.student.grade}
+                      </div>
+                    </div>
+
+                    <div className="mb-4">
+                      <h4 className="font-medium text-gray-900">Actividad:</h4>
+                      <p className="text-gray-800">{intervention.activityName}</p>
+                    </div>
+
                     <div className="flex flex-wrap gap-2 mb-4">
                       {intervention.barriers.map((barrierId) => (
                         <span
@@ -282,79 +483,42 @@ const Interventions = () => {
                           {getBarrierName(barrierId)}
                         </span>
                       ))}
-                    </div>
-                    
-                    <div className="flex flex-col md:flex-row md:items-center text-gray-600 gap-2 md:gap-6">
-                      <div className="flex items-center">
-                        <BookOpen className="h-4 w-4 mr-1 text-primary" />
-                        <span>Profesor: {intervention.teacherName}</span>
-                      </div>
+                      {intervention.learningStyles.map((styleId) => (
+                        <span
+                          key={styleId}
+                          className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm"
+                        >
+                          {getStyleName(styleId)}
+                        </span>
+                      ))}
                     </div>
 
                     {expandedInterventions[intervention.id] && (
-                      <div className="mt-6 border-t pt-4 animate-fade-in">
-                        <h4 className="font-semibold text-gray-800 mb-2">Estilos de aprendizaje:</h4>
-                        <div className="flex flex-wrap gap-2 mb-4">
-                          {intervention.learningStyles.map((styleId) => (
-                            <span
-                              key={styleId}
-                              className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-sm"
-                            >
-                              {getStyleName(styleId)}
-                            </span>
-                          ))}
-                        </div>
-                        
+                      <div className="mt-4 border-t pt-4 animate-fadeIn">
                         <div className="mb-4">
-                          <h4 className="font-semibold text-gray-800 mb-2">Observaciones iniciales:</h4>
-                          <p className="text-gray-700 bg-gray-50 p-3 rounded-md border border-gray-100">
-                            {intervention.observations}
+                          <h4 className="font-medium text-gray-900">Observaciones:</h4>
+                          <p className="text-gray-700 whitespace-pre-wrap">
+                            {intervention.observations || "No hay observaciones registradas."}
                           </p>
                         </div>
 
-                        <Collapsible
-                          open={showComments[intervention.id]}
-                          onOpenChange={() => toggleComments(intervention.id)}
-                          className="mt-4"
-                        >
-                          <CollapsibleTrigger asChild>
-                            <Button 
-                              variant="outline" 
-                              size="sm" 
-                              className="w-full flex gap-2 justify-center"
-                            >
-                              <MessageSquare size={16} />
-                              {showComments[intervention.id] ? "Ocultar observaciones" : "Ver observaciones de seguimiento"}
-                              {showComments[intervention.id] ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                            </Button>
-                          </CollapsibleTrigger>
-                          <CollapsibleContent className="mt-4">
-                            <InterventionComments 
-                              interventionId={intervention.id} 
-                              initialComments={[
-                                {
-                                  id: "1",
-                                  author: "Ana Martínez",
-                                  date: new Date(2023, 3, 15, 10, 30),
-                                  text: "El estudiante mostró avances significativos después de aplicar esta intervención durante dos semanas. Recomiendo continuar con la misma estrategia."
-                                }
-                              ]}
-                            />
-                          </CollapsibleContent>
-                        </Collapsible>
-                        
-                        <div className="flex justify-between mt-4">
-                          <Button variant="outline" size="sm" asChild>
+                        <div className="flex justify-end space-x-2 mt-4">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            asChild
+                          >
                             <Link to={`/intervenciones/editar/${intervention.id}`}>
-                              Editar Intervención
-                            </Link>
-                          </Button>
-                          <Button size="sm" asChild>
-                            <Link to={`/actividades/${intervention.activity}`}>
-                              Ver Actividad
+                              Editar
                             </Link>
                           </Button>
                         </div>
+                      </div>
+                    )}
+
+                    {showComments[intervention.id] && (
+                      <div className="mt-4 border-t pt-4 animate-fadeIn">
+                        <InterventionComments interventionId={intervention.id} />
                       </div>
                     )}
                   </div>

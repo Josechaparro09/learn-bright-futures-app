@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "@/components/Navbar";
@@ -12,24 +11,24 @@ const InterventionWizardPage = () => {
     <div className="min-h-screen flex flex-col bg-gray-50">
       <Navbar />
       
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex flex-col md:flex-row justify-between items-center mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Asistente de Intervención</h1>
-            <p className="text-gray-600">
-              Seleccione una barrera, los estilos de aprendizaje y una actividad para crear una intervención.
-            </p>
-          </div>
+      <div className="container mx-auto px-4 py-6 flex-1 flex flex-col">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Crear nueva intervención</h1>
           <Button 
             onClick={() => navigate("/intervenciones")}
             variant="outline"
-            className="mt-4 md:mt-0"
+            size="sm"
+            className="text-sm"
           >
             Volver a Intervenciones
           </Button>
         </div>
-
-        <div className="bg-white rounded-lg shadow-md p-6">
+        
+        <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-4 sm:p-6 flex-1">
+          <p className="text-gray-600 text-sm mb-6">
+            Complete los pasos para crear una intervención personalizada.
+          </p>
+          
           <InterventionWizard />
         </div>
       </div>

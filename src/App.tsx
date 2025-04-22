@@ -1,4 +1,3 @@
-
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -17,6 +16,7 @@ import Interventions from "./pages/Interventions";
 import ActivityForm from "./pages/ActivityForm";
 import InterventionForm from "./pages/InterventionForm";
 import InterventionWizardPage from "./pages/InterventionWizardPage";
+import AIAssistant from "./pages/AIAssistant";
 
 const queryClient = new QueryClient();
 
@@ -39,6 +39,7 @@ const App = () => (
               <Route path="/actividades" element={<Activities />} />
               <Route path="/actividades/nueva" element={<ActivityForm />} />
               <Route path="/actividades/editar/:id" element={<ActivityForm />} />
+              <Route path="/actividades/asistente" element={<AIAssistant />} />
               <Route path="/intervenciones" element={<Interventions />} />
               <Route path="/intervenciones/asistente" element={<InterventionWizardPage />} />
               <Route path="/intervenciones/nueva" element={<InterventionForm />} />
