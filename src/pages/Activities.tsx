@@ -1,11 +1,28 @@
 import { useState, useEffect } from "react";
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, ChevronUp, Clock, Plus, Search, Filter, ClipboardList } from "lucide-react";
+import { 
+  ChevronDown, ChevronUp, Clock, Plus, Search, 
+  Filter, ClipboardList, Loader2, X, BookOpen 
+} from "lucide-react";
 import { Activity } from "@/data/sampleData";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface ActivityFromDB {
   id: string;
@@ -39,10 +56,8 @@ const Activities = () => {
   const [barriers, setBarriers] = useState<Barrier[]>([]);
   const [learningStyles, setLearningStyles] = useState<LearningStyle[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [barrierFilter, setBarrierFilter] = useState<string[]>([]);
-  const [styleFilter, setStyleFilter] = useState<string[]>([]);
+  const [activeFilters, setActiveFilters] = useState<{type: string, id: string, name: string}[]>([]);
   const [expandedActivities, setExpandedActivities] = useState<Record<string, boolean>>({});
-  const [showFilters, setShowFilters] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
@@ -159,25 +174,23 @@ const Activities = () => {
     });
   };
 
-  const handleBarrierFilterChange = (id: string) => {
-    if (barrierFilter.includes(id)) {
-      setBarrierFilter(barrierFilter.filter((item) => item !== id));
-    } else {
-      setBarrierFilter([...barrierFilter, id]);
+  const addFilter = (type: 'barrier' | 'style', id: string, name: string) => {
+    // Evitar duplicados
+    if (!activeFilters.some(f => f.id === id)) {
+      setActiveFilters([...activeFilters, { 
+        type,
+        id, 
+        name
+      }]);
     }
   };
 
-  const handleStyleFilterChange = (id: string) => {
-    if (styleFilter.includes(id)) {
-      setStyleFilter(styleFilter.filter((item) => item !== id));
-    } else {
-      setStyleFilter([...styleFilter, id]);
-    }
+  const removeFilter = (id: string) => {
+    setActiveFilters(activeFilters.filter(filter => filter.id !== id));
   };
 
   const clearFilters = () => {
-    setBarrierFilter([]);
-    setStyleFilter([]);
+    setActiveFilters([]);
     setSearchTerm("");
   };
 
@@ -189,14 +202,16 @@ const Activities = () => {
       activity.objective.toLowerCase().includes(searchTerm.toLowerCase());
 
     // Filtro por barreras
+    const barrierFilters = activeFilters.filter(f => f.type === 'barrier');
     const matchesBarriers =
-      barrierFilter.length === 0 ||
-      barrierFilter.some((filterId) => activity.barriers.includes(filterId));
+      barrierFilters.length === 0 || 
+      barrierFilters.some(filter => activity.barriers.includes(filter.id));
 
     // Filtro por estilos
+    const styleFilters = activeFilters.filter(f => f.type === 'style');
     const matchesStyles =
-      styleFilter.length === 0 ||
-      styleFilter.some((filterId) => activity.learningStyles.includes(filterId));
+      styleFilters.length === 0 || 
+      styleFilters.some(filter => activity.learningStyles.includes(filter.id));
 
     return matchesSearch && matchesBarriers && matchesStyles;
   });
@@ -230,9 +245,10 @@ const Activities = () => {
     return (
       <div className="min-h-screen flex flex-col bg-gray-50">
         <Navbar />
-        <div className="container mx-auto px-4 py-8">
-          <div className="flex justify-center items-center min-h-[400px]">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+        <div className="container mx-auto px-4 py-8 flex-grow flex items-center justify-center">
+          <div className="flex flex-col items-center">
+            <Loader2 className="h-12 w-12 text-primary animate-spin mb-4" />
+            <p className="text-gray-600">Cargando actividades...</p>
           </div>
         </div>
       </div>
@@ -243,17 +259,17 @@ const Activities = () => {
     <div className="min-h-screen flex flex-col bg-gray-50">
       <Navbar />
       
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex flex-col md:flex-row justify-between items-center mb-8">
+      <div className="container mx-auto px-4 py-6">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Actividades Educativas</h1>
-            <p className="text-gray-600">
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-1">Actividades Educativas</h1>
+            <p className="text-sm md:text-base text-gray-600">
               Explora y gestiona actividades adaptadas para diferentes barreras y estilos de aprendizaje
             </p>
           </div>
           <Button 
             asChild
-            className="mt-4 md:mt-0 gap-2"
+            className="mt-4 md:mt-0 gap-2 w-full md:w-auto"
           >
             <Link to="/actividades/nueva">
               <Plus size={18} /> Nueva Actividad
@@ -261,8 +277,9 @@ const Activities = () => {
           </Button>
         </div>
 
-        <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-          <div className="flex flex-col md:flex-row gap-4 mb-6">
+        <div className="bg-white rounded-lg shadow-md p-4 md:p-6 mb-8">
+          <div className="flex flex-col space-y-4 mb-4">
+            <div className="flex flex-col sm:flex-row gap-2">
             <div className="relative flex-grow">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
               <input
@@ -273,70 +290,111 @@ const Activities = () => {
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
-            <Button 
-              variant="outline" 
-              className="gap-2"
-              onClick={() => setShowFilters(!showFilters)}
-            >
-              <Filter size={18} />
-              Filtros {showFilters ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+              
+              <div className="flex gap-2">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" className="flex-shrink-0">
+                      <Filter size={16} className="mr-2" />
+                      Filtros
             </Button>
-          </div>
-
-          {showFilters && (
-            <div className="bg-gray-50 p-4 rounded-lg mb-6 border border-gray-200">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <h3 className="text-sm font-semibold mb-2 text-gray-700">Barreras de aprendizaje</h3>
-                  <div className="space-y-2">
+                  </PopoverTrigger>
+                  <PopoverContent className="w-80">
+                    <div className="space-y-4">
+                      <h4 className="font-medium text-sm">Filtrar por:</h4>
+                      
+                      <Tabs defaultValue="barriers">
+                        <TabsList className="grid w-full grid-cols-2">
+                          <TabsTrigger value="barriers">Barreras</TabsTrigger>
+                          <TabsTrigger value="styles">Estilos</TabsTrigger>
+                        </TabsList>
+                        
+                        <TabsContent value="barriers" className="mt-2">
+                          <div className="space-y-2 max-h-56 overflow-y-auto pr-2 custom-scrollbar">
                     {barriers.map((barrier) => (
                       <div key={barrier.id} className="flex items-center">
-                        <input
-                          type="checkbox"
-                          id={`barrier-${barrier.id}`}
-                          className="h-4 w-4 text-primary rounded border-gray-300 focus:ring-primary"
-                          checked={barrierFilter.includes(barrier.id)}
-                          onChange={() => handleBarrierFilterChange(barrier.id)}
-                        />
-                        <label htmlFor={`barrier-${barrier.id}`} className="ml-2 text-sm text-gray-700">
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  className="w-full justify-start h-auto py-1 px-2 rounded-md"
+                                  onClick={() => addFilter('barrier', barrier.id, barrier.name)}
+                                >
+                                  <span className="bg-red-100 text-red-800 px-1.5 py-0.5 rounded text-xs mr-2">B</span>
                           {barrier.name}
-                        </label>
+                                </Button>
                       </div>
                     ))}
                   </div>
-                </div>
+                        </TabsContent>
 
-                <div>
-                  <h3 className="text-sm font-semibold mb-2 text-gray-700">Estilos de aprendizaje</h3>
-                  <div className="space-y-2">
+                        <TabsContent value="styles" className="mt-2">
+                          <div className="space-y-2 max-h-56 overflow-y-auto pr-2 custom-scrollbar">
                     {learningStyles.map((style) => (
                       <div key={style.id} className="flex items-center">
-                        <input
-                          type="checkbox"
-                          id={`style-${style.id}`}
-                          className="h-4 w-4 text-primary rounded border-gray-300 focus:ring-primary"
-                          checked={styleFilter.includes(style.id)}
-                          onChange={() => handleStyleFilterChange(style.id)}
-                        />
-                        <label htmlFor={`style-${style.id}`} className="ml-2 text-sm text-gray-700">
+                                <Button 
+                                  variant="ghost" 
+                                  size="sm" 
+                                  className="w-full justify-start h-auto py-1 px-2 rounded-md"
+                                  onClick={() => addFilter('style', style.id, style.name)}
+                                >
+                                  <span className={`px-1.5 py-0.5 rounded text-xs mr-2 ${getStyleColor(style.name)}`}>
+                                    E
+                                  </span>
                           {style.name}
-                        </label>
+                                </Button>
                       </div>
                     ))}
                   </div>
+                        </TabsContent>
+                      </Tabs>
                 </div>
-              </div>
+                  </PopoverContent>
+                </Popover>
 
-              <div className="mt-4 flex justify-end">
-                <Button variant="outline" size="sm" onClick={clearFilters}>
-                  Limpiar filtros
+                {(activeFilters.length > 0 || searchTerm) && (
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={clearFilters}
+                    className="flex-shrink-0"
+                  >
+                    Limpiar
                 </Button>
+                )}
               </div>
             </div>
+            
+            {activeFilters.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {activeFilters.map((filter) => (
+                  <Badge 
+                    key={filter.id} 
+                    variant="secondary"
+                    className="flex items-center gap-1 px-2 py-1 text-sm"
+                  >
+                    {filter.type === 'barrier' ? (
+                      <span className="bg-red-100 text-red-800 px-1 py-0.5 rounded-full text-xs mr-1">B</span>
+                    ) : (
+                      <span className={`px-1 py-0.5 rounded-full text-xs mr-1 ${getStyleColor(filter.name)}`}>E</span>
+                    )}
+                    {filter.name}
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="h-4 w-4 p-0 ml-1 text-gray-500 hover:text-gray-700"
+                      onClick={() => removeFilter(filter.id)}
+                    >
+                      <X size={12} />
+                      <span className="sr-only">Eliminar filtro</span>
+                    </Button>
+                  </Badge>
+                ))}
+            </div>
           )}
+          </div>
 
           {filteredActivities.length === 0 ? (
-            <div className="text-center py-16">
+            <div className="text-center py-12">
               <ClipboardList className="mx-auto h-12 w-12 text-gray-400 mb-4" />
               <h3 className="text-lg font-medium text-gray-900 mb-1">No se encontraron actividades</h3>
               <p className="text-gray-500 mb-4">Intenta con otros términos de búsqueda o añade una nueva actividad</p>
@@ -347,100 +405,147 @@ const Activities = () => {
               </Button>
             </div>
           ) : (
-            <div className="space-y-6">
+            <div className="space-y-4">
               {filteredActivities.map((activity) => (
-                <div
+                <Card
                   key={activity.id}
-                  className="bg-white border rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow"
+                  className="overflow-hidden transition-shadow hover:shadow-md"
                 >
-                  <div className="p-5">
+                  <CardHeader className="p-4 pb-0">
                     <div className="flex justify-between items-start">
-                      <h3 className="text-xl font-semibold text-gray-900 mb-2">{activity.name}</h3>
+                      <CardTitle className="text-xl">{activity.name}</CardTitle>
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => toggleExpand(activity.id)}
-                        className="h-8 w-8 p-0 ml-2"
+                        className="h-8 w-8 p-0 rounded-full"
                         title={expandedActivities[activity.id] ? "Colapsar" : "Expandir"}
                       >
                         {expandedActivities[activity.id] ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
                       </Button>
                     </div>
+                  </CardHeader>
                     
-                    <p className="text-gray-700 mb-4">{activity.objective}</p>
+                  <CardContent className="p-4 pt-2">
+                    <p className="text-gray-700 mb-3 line-clamp-2">{activity.objective}</p>
                     
-                    <div className="flex flex-wrap gap-2 mb-4">
-                      {activity.barriers.map((barrierId) => (
+                    <div className="flex flex-wrap gap-1.5 mb-3">
+                      {activity.barriers.slice(0, 2).map((barrierId) => (
                         <span
                           key={barrierId}
-                          className="bg-red-100 text-red-800 px-2 py-1 rounded text-sm"
+                          className="bg-red-100 text-red-800 px-2 py-0.5 rounded text-xs"
                         >
                           {getBarrierName(barrierId)}
                         </span>
                       ))}
-                      {activity.learningStyles.map((styleId) => (
+                      {activity.barriers.length > 2 && (
+                        <span className="text-xs text-gray-500 px-1">
+                          +{activity.barriers.length - 2}
+                        </span>
+                      )}
+                      {activity.learningStyles.slice(0, 2).map((styleId) => (
                         <span
                           key={styleId}
-                          className={`px-2 py-1 rounded text-sm ${getStyleColor(getStyleName(styleId))}`}
+                          className={`px-2 py-0.5 rounded text-xs ${getStyleColor(getStyleName(styleId))}`}
                         >
                           {getStyleName(styleId)}
                         </span>
                       ))}
+                      {activity.learningStyles.length > 2 && (
+                        <span className="text-xs text-gray-500 px-1">
+                          +{activity.learningStyles.length - 2}
+                        </span>
+                      )}
                     </div>
 
                     {expandedActivities[activity.id] && (
-                      <div className="mt-6 border-t pt-4 animate-fade-in">
+                      <div className="mt-4 border-t pt-4 animate-fade-in">
                         <div className="mb-4">
-                          <h4 className="font-semibold text-gray-800 mb-2">Materiales necesarios:</h4>
-                          <ul className="list-disc pl-5 text-gray-700">
+                          <h4 className="font-semibold text-gray-800 text-sm mb-2 flex items-center">
+                            <BookOpen size={16} className="mr-2" />
+                            Materiales necesarios:
+                          </h4>
+                          <ul className="list-disc pl-5 text-gray-700 text-sm space-y-1">
                             {activity.materials.map((material, index) => (
                               <li key={index}>{material}</li>
                             ))}
+                            {activity.materials.length === 0 && (
+                              <li className="text-gray-500">No se han especificado materiales</li>
+                            )}
                           </ul>
                         </div>
                         
                         <div className="mb-4">
-                          <h4 className="font-semibold text-gray-800 mb-2">Desarrollo:</h4>
-                          <p className="text-gray-700 mb-3">{activity.development.description}</p>
+                          <h4 className="font-semibold text-gray-800 text-sm mb-2">Desarrollo:</h4>
+                          {activity.development.description && (
+                            <p className="text-gray-700 text-sm mb-3">{activity.development.description}</p>
+                          )}
                           
-                          <div className="pl-4 border-l-2 border-primary/30">
+                          {activity.development.steps.length > 0 ? (
+                            <div className="pl-4 border-l-2 border-primary/30 space-y-3">
                             {activity.development.steps.map((step, index) => (
-                              <div key={step.id} className="mb-4">
+                                <div key={step.id || index} className="relative">
                                 <div className="flex items-start">
-                                  <div className="bg-primary text-white rounded-full w-6 h-6 flex items-center justify-center mr-3 flex-shrink-0 mt-1">
+                                    <div className="bg-primary text-white rounded-full w-5 h-5 flex items-center justify-center mr-3 flex-shrink-0 mt-0.5 text-xs">
                                     {index + 1}
                                   </div>
                                   <div>
-                                    <p className="text-gray-700">{step.description}</p>
-                                    <div className="flex items-center mt-1 text-sm text-gray-500">
-                                      <Clock size={14} className="mr-1" />
+                                      <p className="text-gray-700 text-sm">{step.description}</p>
+                                      {(step.durationMin && step.durationMax) && (
+                                        <div className="flex items-center mt-1 text-xs text-gray-500">
+                                          <Clock size={12} className="mr-1" />
                                       <span>
-                                        {step.durationMin}-{step.durationMax} {step.durationUnit}
+                                            {step.durationMin}-{step.durationMax} {step.durationUnit || 'minutos'}
                                       </span>
+                                        </div>
+                                      )}
                                     </div>
                                   </div>
                                 </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-gray-500 text-sm italic">No se han especificado pasos</p>
+                          )}
                               </div>
+                        
+                        <div className="flex flex-wrap justify-between gap-2 mt-4 pt-2 border-t border-gray-100">
+                          <div className="flex flex-wrap gap-1.5">
+                            {activity.barriers.map((barrierId) => (
+                              <span
+                                key={barrierId}
+                                className="bg-red-100 text-red-800 px-2 py-0.5 rounded text-xs"
+                              >
+                                {getBarrierName(barrierId)}
+                              </span>
+                            ))}
+                            {activity.learningStyles.map((styleId) => (
+                              <span
+                                key={styleId}
+                                className={`px-2 py-0.5 rounded text-xs ${getStyleColor(getStyleName(styleId))}`}
+                              >
+                                {getStyleName(styleId)}
+                              </span>
                             ))}
                           </div>
                         </div>
+                      </div>
+                    )}
+                  </CardContent>
                         
-                        <div className="flex justify-between mt-4">
+                  <CardFooter className="p-4 pt-0 flex justify-end gap-2">
                           <Button variant="outline" size="sm" asChild>
                             <Link to={`/actividades/editar/${activity.id}`}>
-                              Editar Actividad
+                        Editar
                             </Link>
                           </Button>
                           <Button size="sm" asChild>
                             <Link to={`/intervenciones/nueva?activityId=${activity.id}`}>
-                              Crear Intervención
+                        Intervenir
                             </Link>
                           </Button>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
+                  </CardFooter>
+                </Card>
               ))}
             </div>
           )}

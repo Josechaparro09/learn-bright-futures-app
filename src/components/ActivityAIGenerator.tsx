@@ -8,24 +8,37 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { 
   Loader2, Send, Check, AlertCircle, BookOpen, BarChart2, 
-  Lightbulb, Sparkles, Clock, Brain, Bot, InfoIcon
+  Lightbulb, Sparkles, Clock, Brain, InfoIcon, X, Save, ListChecks,
+  ClipboardList, LayoutList, PersonStanding
 } from "lucide-react";
-import { AVAILABLE_MODELS, DEFAULT_MODEL, generateActivity } from "@/integrations/openai/service";
+import { generateActivity } from "@/integrations/openai/service";
 import { 
   ActivityGenerationParams, ChatMessage, GeneratedActivity, 
-  ModelInfo, OpenAIModel, ResponseStatistics 
+  ResponseStatistics 
 } from "@/integrations/openai/types";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
 import { useAuth } from "@/context/AuthContext";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Separator } from "@/components/ui/separator";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
+
+interface LearningStyle {
+  id: string;
+  name: string;
+  description: string;
+  color: string | null;
+  created_at: string;
+  created_by: string;
+  updated_at: string;
+}
 
 interface ActivityAIGeneratorProps {
   selectedBarriers: Tables<'barriers'>[];
-  selectedLearningStyles: Tables<'learning_styles'>[];
-  selectedStudentId?: string;
+  selectedLearningStyles: LearningStyle[];
+  selectedStudentId?: string | null;
   onActivityGenerated: (activity: any) => void;
 }
 
@@ -41,10 +54,12 @@ const ActivityAIGenerator = ({
   const [input, setInput] = useState("");
   const [customDescription, setCustomDescription] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedModel, setSelectedModel] = useState<OpenAIModel>(DEFAULT_MODEL);
   const [generatedActivity, setGeneratedActivity] = useState<GeneratedActivity | null>(null);
   const [responseStats, setResponseStats] = useState<ResponseStatistics | null>(null);
   const [studentInfo, setStudentInfo] = useState<any>(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState<string>("barriers"); // Para controlar la pestaña activa en móvil
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Cargar información del estudiante si se proporciona un ID
@@ -107,7 +122,7 @@ const ActivityAIGenerator = ({
     }
   }, [messages]);
 
-  // Generar actividad con OpenAI
+  // Generar actividad con IA
   const handleGenerateActivity = async () => {
     if (selectedBarriers.length === 0 || selectedLearningStyles.length === 0) {
       toast({
@@ -125,7 +140,6 @@ const ActivityAIGenerator = ({
         barriers: selectedBarriers,
         learningStyles: selectedLearningStyles,
         customDescription: customDescription.trim() || undefined,
-        selectedModel,
         studentInfo: studentInfo
       };
 
@@ -140,6 +154,8 @@ const ActivityAIGenerator = ({
         ...messages,
         { role: 'assistant', content: activityDescription }
       ]);
+      
+      setIsPreviewOpen(true);
       
     } catch (error) {
       console.error("Error generando actividad:", error);
@@ -156,6 +172,8 @@ const ActivityAIGenerator = ({
   // Guardar la actividad generada en la base de datos
   const handleSaveActivity = async () => {
     if (!generatedActivity || !user) return;
+    
+    setIsSaving(true);
     
     try {
       setIsLoading(true);
@@ -233,6 +251,7 @@ const ActivityAIGenerator = ({
       });
     } finally {
       setIsLoading(false);
+      setIsSaving(false);
     }
   };
 
@@ -254,7 +273,6 @@ const ActivityAIGenerator = ({
         ? [...messages, userMessage] 
         : [{ role: 'system' as const, content: systemContext }, userMessage];
       
-      // En un entorno real, enviaríamos esto a la API de OpenAI
       setTimeout(() => {
         const assistantMessage: ChatMessage = { 
           role: 'assistant', 
@@ -275,382 +293,370 @@ const ActivityAIGenerator = ({
     }
   };
 
-  // Formatear milisegundos como string
-  const formatTime = (ms: number): string => {
-    if (ms < 1000) return `${ms}ms`;
-    return `${(ms / 1000).toFixed(2)}s`;
-  };
-
   // Formatear tokens
   const formatTokens = (count: number): string => {
     return count.toLocaleString();
   };
 
+  // Determinar si hay selecciones para cambiar estilo de botón
+  const hasSelections = selectedBarriers.length > 0 && selectedLearningStyles.length > 0;
+
   return (
-    <Card className="w-full">
-      <CardHeader>
-        <CardTitle>Asistente de Creación de Actividades</CardTitle>
-        <CardDescription>
-          Usa IA para generar actividades adaptadas a barreras y estilos de aprendizaje
-        </CardDescription>
-      </CardHeader>
-      
-      <Tabs defaultValue="chat">
-        <TabsList className="mx-6">
-          <TabsTrigger value="chat">Chat</TabsTrigger>
-          <TabsTrigger value="activity" disabled={!generatedActivity}>
-            Actividad Generada
-          </TabsTrigger>
-          <TabsTrigger value="stats" disabled={!responseStats}>
-            Estadísticas
-          </TabsTrigger>
-        </TabsList>
+    <div className="space-y-6">
+      {/* Tarjeta principal de generación */}
+      <Card className="shadow-md border-primary/10 overflow-hidden">
+        <CardHeader className="bg-gradient-to-r from-primary/5 to-primary/10 pb-4 rounded-t-lg px-4 sm:px-6">
+          <CardTitle className="flex items-center gap-2 text-xl">
+            <Sparkles className="h-5 w-5 text-primary" />
+            Generador de Actividades
+          </CardTitle>
+          <CardDescription>
+            Crea actividades personalizadas según barreras y estilos de aprendizaje
+          </CardDescription>
+        </CardHeader>
         
-        <TabsContent value="chat">
-          <CardContent className="space-y-4">
-            <div className="space-y-4">
-              <div className="flex flex-wrap gap-2 mb-4">
-                <p className="text-sm font-medium w-full mb-1">Barreras seleccionadas:</p>
-                {selectedBarriers.map((barrier) => (
-                  <Badge key={barrier.id} variant="outline">
-                    {barrier.name}
-                  </Badge>
-                ))}
-              </div>
+        <CardContent className="space-y-4 pt-6 px-4 sm:px-6">
+          {/* Tabs para dispositivos móviles */}
+          <div className="block sm:hidden">
+            <Tabs 
+              defaultValue="barriers" 
+              value={activeTab} 
+              onValueChange={setActiveTab}
+              className="w-full"
+            >
+              <TabsList className="grid grid-cols-3 mb-4">
+                <TabsTrigger 
+                  value="barriers" 
+                  className="flex items-center gap-1 text-xs"
+                >
+                  <ClipboardList className="h-3.5 w-3.5" />
+                  <span>Barreras</span>
+                  {selectedBarriers.length > 0 && (
+                    <Badge variant="secondary" className="ml-1 h-5 w-5 p-0 flex items-center justify-center">
+                      {selectedBarriers.length}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="styles" 
+                  className="flex items-center gap-1 text-xs"
+                >
+                  <LayoutList className="h-3.5 w-3.5" />
+                  <span>Estilos</span>
+                  {selectedLearningStyles.length > 0 && (
+                    <Badge variant="secondary" className="ml-1 h-5 w-5 p-0 flex items-center justify-center">
+                      {selectedLearningStyles.length}
+                    </Badge>
+                  )}
+                </TabsTrigger>
+                <TabsTrigger 
+                  value="student" 
+                  className="flex items-center gap-1 text-xs"
+                >
+                  <PersonStanding className="h-3.5 w-3.5" />
+                  <span>Estudiante</span>
+                  {selectedStudentId && (
+                    <Badge variant="secondary" className="ml-1 h-5 w-5 p-0 flex items-center justify-center">
+                      <Check className="h-3 w-3" />
+                    </Badge>
+                  )}
+                </TabsTrigger>
+              </TabsList>
               
-              <div className="flex flex-wrap gap-2 mb-4">
-                <p className="text-sm font-medium w-full mb-1">Estilos de aprendizaje:</p>
-                {selectedLearningStyles.map((style) => (
-                  <Badge key={style.id} variant="outline">
-                    {style.name}
-                  </Badge>
-                ))}
-              </div>
-              
-              {studentInfo && (
-                <div className="mb-4">
-                  <p className="text-sm font-medium mb-1">Estudiante:</p>
-                  <Badge variant="secondary">{studentInfo.name} - {studentInfo.grade}</Badge>
+              <TabsContent value="barriers" className="mt-0 border rounded-md p-3">
+                <h3 className="text-sm font-medium flex items-center gap-2 mb-2">
+                  <Brain className="h-4 w-4 text-primary" />
+                  Barreras seleccionadas
+                </h3>
+                <div className="flex flex-wrap gap-2 min-h-[60px]">
+                  {selectedBarriers.length > 0 ? (
+                    selectedBarriers.map(barrier => (
+                      <Badge key={barrier.id} variant="secondary" className="bg-red-100 text-red-800 py-1.5">
+                        {barrier.name}
+                      </Badge>
+                    ))
+                  ) : (
+                    <div className="flex items-center justify-center w-full h-full">
+                      <p className="text-sm text-muted-foreground py-4">
+                        No hay barreras seleccionadas
+                      </p>
+                    </div>
+                  )}
                 </div>
-              )}
+              </TabsContent>
               
-              <div className="space-y-1.5">
-                <Label htmlFor="model-selector">Modelo de IA</Label>
-                <Select 
-                  defaultValue={selectedModel}
-                  onValueChange={(value) => setSelectedModel(value as OpenAIModel)}
-                  disabled={isLoading}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Selecciona un modelo" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {AVAILABLE_MODELS.map((model) => (
-                      <SelectItem key={model.id} value={model.id}>
-                        <div className="flex items-center">
-                          <span>{model.name}</span>
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <Button variant="ghost" size="icon" className="ml-1 h-5 w-5">
-                                <InfoIcon className="h-3 w-3" />
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-80 p-3 text-sm">
-                              <p className="font-medium">{model.name}</p>
-                              <p className="text-muted-foreground">{model.description}</p>
-                              <p className="text-xs text-muted-foreground mt-1">Máx. tokens: {model.maxTokens.toLocaleString()}</p>
-                            </PopoverContent>
-                          </Popover>
-                        </div>
-                      </SelectItem>
+              <TabsContent value="styles" className="mt-0 border rounded-md p-3">
+                <h3 className="text-sm font-medium flex items-center gap-2 mb-2">
+                  <BarChart2 className="h-4 w-4 text-primary" />
+                  Estilos de aprendizaje
+                </h3>
+                <div className="flex flex-wrap gap-2 min-h-[60px]">
+                  {selectedLearningStyles.length > 0 ? (
+                    selectedLearningStyles.map(style => (
+                      <Badge key={style.id} variant="secondary" className="bg-blue-100 text-blue-800 py-1.5">
+                        {style.name}
+                      </Badge>
+                    ))
+                  ) : (
+                    <div className="flex items-center justify-center w-full h-full">
+                      <p className="text-sm text-muted-foreground py-4">
+                        No hay estilos seleccionados
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
+              
+              <TabsContent value="student" className="mt-0 border rounded-md p-3">
+                <h3 className="text-sm font-medium flex items-center gap-2 mb-2">
+                  <PersonStanding className="h-4 w-4 text-primary" />
+                  Estudiante seleccionado
+                </h3>
+                <div className="flex flex-wrap gap-2 min-h-[60px]">
+                  {selectedStudentId && studentInfo ? (
+                    <div className="w-full bg-blue-50 rounded-md p-3">
+                      <p className="font-medium">{studentInfo.name}</p>
+                      <p className="text-sm text-gray-600">{studentInfo.grade}</p>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center w-full h-full">
+                      <p className="text-sm text-muted-foreground py-4">
+                        No hay estudiante seleccionado
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
+            </Tabs>
+          </div>
+          
+          {/* Vista para tabletas/escritorio */}
+          <div className="hidden sm:grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div>
+              <h3 className="text-sm font-medium flex items-center gap-2 mb-2">
+                <Brain className="h-4 w-4 text-primary" />
+                Barreras seleccionadas
+              </h3>
+              <div className="flex flex-wrap gap-2 min-h-9">
+                {selectedBarriers.length > 0 ? (
+                  selectedBarriers.map(barrier => (
+                    <Badge key={barrier.id} variant="secondary" className="bg-red-100 text-red-800">
+                      {barrier.name}
+                    </Badge>
+                  ))
+                ) : (
+                  <span className="text-sm text-muted-foreground">No hay barreras seleccionadas</span>
+                )}
+              </div>
+            </div>
+            
+            <div>
+              <h3 className="text-sm font-medium flex items-center gap-2 mb-2">
+                <BarChart2 className="h-4 w-4 text-primary" />
+                Estilos de aprendizaje
+              </h3>
+              <div className="flex flex-wrap gap-2 min-h-9">
+                {selectedLearningStyles.length > 0 ? (
+                  selectedLearningStyles.map(style => (
+                    <Badge key={style.id} variant="secondary" className="bg-blue-100 text-blue-800">
+                      {style.name}
+                    </Badge>
+                  ))
+                ) : (
+                  <span className="text-sm text-muted-foreground">No hay estilos seleccionados</span>
+                )}
+              </div>
+            </div>
+          </div>
+          
+          <Separator className="my-2" />
+          
+          <div>
+            <Label htmlFor="custom-description" className="flex items-center gap-2 mb-2">
+              <InfoIcon className="h-4 w-4 text-primary" />
+              Consideraciones adicionales (opcional)
+            </Label>
+            <Textarea 
+              id="custom-description"
+              placeholder="Describe consideraciones específicas: nivel de dificultad, temas de interés, limitaciones..."
+              value={customDescription}
+              onChange={(e) => setCustomDescription(e.target.value)}
+              rows={3}
+              className="resize-none"
+            />
+          </div>
+          
+          <Button 
+            onClick={handleGenerateActivity} 
+            className={cn(
+              "w-full mt-2 text-white",
+              hasSelections 
+                ? "bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary"
+                : "bg-gray-400 hover:bg-gray-400 cursor-not-allowed"
+            )}
+            disabled={isLoading || !hasSelections}
+            size="lg"
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                <span className="text-base">Creando actividad...</span>
+              </>
+            ) : (
+              <>
+                <Sparkles className="mr-2 h-5 w-5" />
+                <span className="text-base">Generar Actividad</span>
+              </>
+            )}
+          </Button>
+          
+          {!hasSelections && (
+            <Alert className="bg-yellow-50 border-yellow-200 text-yellow-800 text-sm mt-2">
+              <AlertCircle className="h-4 w-4" />
+              <div className="ml-2">
+                <AlertTitle className="text-sm">Selecciones pendientes</AlertTitle>
+                <AlertDescription className="text-xs">
+                  Selecciona al menos una barrera y un estilo de aprendizaje para continuar
+                </AlertDescription>
+              </div>
+            </Alert>
+          )}
+        </CardContent>
+      </Card>
+      
+      {/* Diálogo de vista previa optimizado para móvil */}
+      {generatedActivity && (
+        <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
+          <DialogContent className="max-w-full sm:max-w-3xl max-h-[90vh] overflow-y-auto p-0">
+            <DialogHeader className="px-4 py-4 sm:py-6 sm:px-6 bg-primary/5 sticky top-0 z-10">
+              <DialogTitle className="text-xl sm:text-2xl flex items-center gap-2">
+                <BookOpen className="h-5 w-5 text-primary" />
+                {generatedActivity.name}
+              </DialogTitle>
+              <DialogDescription>
+                Vista previa de la actividad personalizada
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-4 p-4 sm:space-y-6 sm:p-6">
+              <Card className="border-primary/20 shadow-sm">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Lightbulb className="h-4 w-4 text-primary" />
+                    Objetivo
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-gray-700">{generatedActivity.objective}</p>
+                </CardContent>
+              </Card>
+              
+              <Card className="border-primary/20 shadow-sm">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <ListChecks className="h-4 w-4 text-primary" />
+                    Materiales
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {generatedActivity.materials.length > 0 ? (
+                    <ul className="list-disc pl-5 space-y-1 text-gray-700">
+                      {generatedActivity.materials.map((material, idx) => (
+                        <li key={idx}>{material}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-gray-500 italic">No se especificaron materiales</p>
+                  )}
+                </CardContent>
+              </Card>
+              
+              <Card className="border-primary/20 shadow-sm">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-primary" />
+                    Desarrollo
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {generatedActivity.development?.steps && generatedActivity.development.steps.length > 0 ? (
+                    <ol className="space-y-4 pl-5 list-decimal">
+                      {generatedActivity.development.steps.map((step, idx) => (
+                        <li key={idx} className="text-gray-700">
+                          <div className="bg-gray-50 p-3 rounded-md border border-gray-100">
+                            <p className="font-medium">{step.description}</p>
+                            {step.duration && (
+                              <Badge variant="outline" className="mt-2 text-xs">
+                                <Clock className="h-3 w-3 mr-1" />
+                                {step.duration}
+                              </Badge>
+                            )}
+                          </div>
+                        </li>
+                      ))}
+                    </ol>
+                  ) : (
+                    <p className="text-gray-500 italic">No se especificaron pasos de desarrollo</p>
+                  )}
+                </CardContent>
+              </Card>
+              
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="bg-gray-50 p-4 rounded-md shadow-sm">
+                  <h3 className="font-semibold text-gray-700 mb-2">Barreras que atiende:</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedBarriers.map(barrier => (
+                      <Badge key={barrier.id} variant="secondary" className="bg-red-100 text-red-800">
+                        {barrier.name}
+                      </Badge>
                     ))}
-                  </SelectContent>
-                </Select>
+                  </div>
+                </div>
+                
+                <div className="bg-gray-50 p-4 rounded-md shadow-sm">
+                  <h3 className="font-semibold text-gray-700 mb-2">Estilos de aprendizaje:</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedLearningStyles.map(style => (
+                      <Badge key={style.id} variant="secondary" className="bg-blue-100 text-blue-800">
+                        {style.name}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
               </div>
-              
-              <div className="space-y-1.5">
-                <Label 
-                  htmlFor="custom-description" 
-                  className="flex items-center gap-1"
-                >
-                  <Lightbulb className="h-4 w-4 text-amber-500" />
-                  Consideraciones adicionales
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-5 w-5">
-                        <InfoIcon className="h-3 w-3" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-80 p-3 text-sm">
-                      <p>Aquí puedes añadir información específica sobre el comportamiento del estudiante, 
-                      sugerencias para la actividad, o cualquier otra consideración que deba tenerse en cuenta.</p>
-                      <p className="mt-1">Por ejemplo: "El estudiante se distrae fácilmente con estímulos visuales 
-                      y responde mejor a actividades con movimiento" o "Incluir actividades que refuercen la memoria 
-                      a corto plazo".</p>
-                    </PopoverContent>
-                  </Popover>
-                </Label>
-                <Textarea 
-                  id="custom-description"
-                  placeholder="Describe comportamientos específicos, sugerencias o cualquier detalle adicional..."
-                  value={customDescription}
-                  onChange={(e) => setCustomDescription(e.target.value)}
-                  className="resize-none h-24"
-                />
-              </div>
-              
-              <Button
-                onClick={handleGenerateActivity}
-                disabled={isLoading || selectedBarriers.length === 0 || selectedLearningStyles.length === 0}
-                className="w-full mb-4"
+            </div>
+            
+            <DialogFooter className="sticky bottom-0 p-4 bg-white border-t flex flex-col gap-3 sm:flex-row sm:px-6">
+              <Button 
+                variant="outline" 
+                onClick={() => setIsPreviewOpen(false)}
+                className="w-full sm:w-auto order-2 sm:order-1"
               >
-                {isLoading ? (
+                <X className="h-4 w-4 mr-2" />
+                Cancelar
+              </Button>
+              <Button 
+                onClick={handleSaveActivity} 
+                disabled={isSaving} 
+                className="w-full sm:w-auto bg-primary order-1 sm:order-2"
+              >
+                {isSaving ? (
                   <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Generando...
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Guardando...
                   </>
                 ) : (
                   <>
-                    <Sparkles className="mr-2 h-4 w-4" />
-                    Generar Actividad
+                    <Save className="h-4 w-4 mr-2" />
+                    Guardar Actividad
                   </>
                 )}
               </Button>
-              
-              <ScrollArea className="h-[250px] rounded-md border p-4" ref={scrollRef}>
-                {messages.length === 0 ? (
-                  <div className="flex items-center justify-center h-full text-center text-muted-foreground p-4">
-                    <p>
-                      Pregunta al asistente sobre estrategias para las barreras y estilos seleccionados, o
-                      genera una actividad completa.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {messages.map((msg, index) => (
-                      <div
-                        key={index}
-                        className={`flex ${
-                          msg.role === "user" ? "justify-end" : "justify-start"
-                        }`}
-                      >
-                        <div
-                          className={`rounded-lg px-4 py-2 max-w-[80%] ${
-                            msg.role === "user"
-                              ? "bg-primary text-primary-foreground"
-                              : "bg-muted"
-                          }`}
-                        >
-                          {msg.content}
-                        </div>
-                      </div>
-                    ))}
-                    {isLoading && (
-                      <div className="flex justify-start">
-                        <div className="rounded-lg px-4 py-2 bg-muted">
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </ScrollArea>
-            </div>
-          </CardContent>
-          
-          <CardFooter className="flex gap-2">
-            <Textarea
-              placeholder="Escribe tu mensaje..."
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              className="resize-none"
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSendMessage();
-                }
-              }}
-            />
-            <Button size="icon" onClick={handleSendMessage} disabled={isLoading || !input.trim()}>
-              <Send className="h-4 w-4" />
-            </Button>
-          </CardFooter>
-        </TabsContent>
-        
-        <TabsContent value="activity">
-          {generatedActivity && (
-            <CardContent>
-              <div className="space-y-6">
-                <div>
-                  <h3 className="text-lg font-semibold">{generatedActivity.name}</h3>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Actividad generada por IA basada en tus selecciones
-                  </p>
-                </div>
-                
-                <div>
-                  <h4 className="font-medium mb-2">Objetivo:</h4>
-                  <p>{generatedActivity.objective}</p>
-                </div>
-                
-                <div>
-                  <h4 className="font-medium mb-2">Materiales:</h4>
-                  <ul className="list-disc pl-5 space-y-1">
-                    {generatedActivity.materials.map((material, idx) => (
-                      <li key={idx}>{material}</li>
-                    ))}
-                  </ul>
-                </div>
-                
-                <div>
-                  <h4 className="font-medium mb-2">Desarrollo:</h4>
-                  <ol className="space-y-4">
-                    {generatedActivity.development.steps.map((step, idx) => (
-                      <li key={idx} className="pl-5">
-                        <div className="flex items-start">
-                          <div className="bg-primary text-primary-foreground rounded-full w-6 h-6 flex items-center justify-center mr-2 flex-shrink-0 mt-1">
-                            {idx + 1}
-                          </div>
-                          <div>
-                            <p>{step.description}</p>
-                            <p className="text-sm text-muted-foreground">{step.duration}</p>
-                          </div>
-                        </div>
-                      </li>
-                    ))}
-                  </ol>
-                </div>
-                
-                <div className="pt-4 flex justify-end gap-4">
-                  <Button variant="outline" onClick={() => setGeneratedActivity(null)}>
-                    <AlertCircle className="mr-2 h-4 w-4" />
-                    Descartar
-                  </Button>
-                  <Button onClick={handleSaveActivity} disabled={isLoading}>
-                    {isLoading ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Check className="mr-2 h-4 w-4" />
-                    )}
-                    Guardar Actividad
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          )}
-        </TabsContent>
-        
-        <TabsContent value="stats">
-          {responseStats && (
-            <CardContent>
-              <h3 className="text-lg font-semibold mb-4 flex items-center">
-                <BarChart2 className="mr-2 h-5 w-5 text-primary" />
-                Estadísticas de Generación
-              </h3>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <Card>
-                  <CardHeader className="py-4">
-                    <CardTitle className="text-base flex items-center">
-                      <Bot className="mr-2 h-4 w-4" />
-                      Modelo Utilizado
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="py-2">
-                    <p className="text-xl font-semibold">
-                      {AVAILABLE_MODELS.find(m => m.id === responseStats.model)?.name || responseStats.model}
-                    </p>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      {AVAILABLE_MODELS.find(m => m.id === responseStats.model)?.description || 'Modelo de OpenAI'}
-                    </p>
-                  </CardContent>
-                </Card>
-                
-                <Card>
-                  <CardHeader className="py-4">
-                    <CardTitle className="text-base flex items-center">
-                      <Clock className="mr-2 h-4 w-4" />
-                      Tiempo de Respuesta
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="py-2">
-                    <p className="text-xl font-semibold">
-                      {formatTime(responseStats.latencyMs)}
-                    </p>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Hora: {new Date(responseStats.responseTimestamp).toLocaleTimeString()}
-                    </p>
-                  </CardContent>
-                </Card>
-                
-                <Card>
-                  <CardHeader className="py-4">
-                    <CardTitle className="text-base flex items-center">
-                      <Brain className="mr-2 h-4 w-4" />
-                      Tokens de Entrada
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="py-2">
-                    <p className="text-xl font-semibold">
-                      {formatTokens(responseStats.promptTokens)}
-                    </p>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Tokens utilizados en el prompt
-                    </p>
-                  </CardContent>
-                </Card>
-                
-                <Card>
-                  <CardHeader className="py-4">
-                    <CardTitle className="text-base flex items-center">
-                      <BookOpen className="mr-2 h-4 w-4" />
-                      Tokens de Salida
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="py-2">
-                    <p className="text-xl font-semibold">
-                      {formatTokens(responseStats.completionTokens)}
-                    </p>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Tokens utilizados en la respuesta
-                    </p>
-                  </CardContent>
-                </Card>
-              </div>
-              
-              <div className="mt-4">
-                <Card>
-                  <CardHeader className="py-4">
-                    <CardTitle className="text-base flex items-center">
-                      <BarChart2 className="mr-2 h-4 w-4" />
-                      Resumen Total
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="py-2">
-                    <div className="flex flex-col gap-2">
-                      <div className="flex justify-between">
-                        <span>Tokens Totales:</span>
-                        <span className="font-semibold">{formatTokens(responseStats.totalTokens)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Tiempo de Procesamiento:</span>
-                        <span className="font-semibold">{formatTime(responseStats.latencyMs)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Modelo:</span>
-                        <span className="font-semibold">
-                          {AVAILABLE_MODELS.find(m => m.id === responseStats.model)?.name || responseStats.model}
-                        </span>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-            </CardContent>
-          )}
-        </TabsContent>
-      </Tabs>
-    </Card>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+    </div>
   );
 };
 

@@ -317,35 +317,12 @@ const AIAssistant = () => {
           </div>
           
           <div className="md:col-span-2">
-            <Card className="h-full">
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <BookOpen className="h-5 w-5 mr-2 text-primary" />
-                  Asistente de IA
-                </CardTitle>
-                <CardDescription>
-                  Genera actividades educativas personalizadas con inteligencia artificial
-                </CardDescription>
-              </CardHeader>
-              
-              <CardContent>
-                {isLoading ? (
-                  <div className="flex justify-center items-center py-20">
-                    <div className="text-center">
-                      <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                      <p className="mt-2 text-sm text-muted-foreground">Cargando...</p>
-                    </div>
-                  </div>
-                ) : (
-                  <ActivityAIGenerator
-                    selectedBarriers={selectedBarriers}
-                    selectedLearningStyles={selectedLearningStyles}
-                    selectedStudentId={selectedStudent?.id}
-                    onActivityGenerated={handleActivityGenerated}
-                  />
-                )}
-              </CardContent>
-            </Card>
+                <ActivityAIGenerator
+                  selectedBarriers={selectedBarriers}
+                  selectedLearningStyles={selectedLearningStyles}
+                  selectedStudentId={selectedStudent?.id}
+                  onActivityGenerated={handleActivityGenerated}
+                />
           </div>
         </div>
       </main>

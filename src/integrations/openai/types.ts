@@ -46,6 +46,7 @@ export type GeneratedActivity = {
   objective: string;
   materials: string[];
   development: {
+    description?: string;
     steps: Array<{
       description: string;
       duration: string;

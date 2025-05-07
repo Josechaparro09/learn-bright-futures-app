@@ -16,6 +16,38 @@ import {
 import { v4 as uuidv4 } from "uuid";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
+import { Search, Plus, User, X, Calendar } from "lucide-react";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from "@/components/ui/tabs";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
+import { CalendarIcon } from "@radix-ui/react-icons";
+import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 
 // Definir la estructura de la tabla interventions en Supabase
 interface SupabaseIntervention {
@@ -27,6 +59,24 @@ interface SupabaseIntervention {
   date?: string;
   created_at?: string;
   updated_at?: string;
+}
+
+// Estructura para estudiante
+interface Student {
+  id: string;
+  name: string;
+  grade: string;
+  created_by?: string;
+  created_at?: string;
+}
+
+// Definir estado para el formulario
+interface StudentFormState {
+  mode: 'create' | 'select';
+  searchTerm: string;
+  selectedStudent: Student | null;
+  searchResults: Student[];
+  isSearching: boolean;
 }
 
 const InterventionForm = () => {
@@ -74,6 +124,18 @@ const InterventionForm = () => {
   // Estado adicional para mostrar el nombre del profesor (solo para mostrar)
   const [teacherName, setTeacherName] = useState("");
   
+  // Estado para la selección de estudiantes
+  const [studentForm, setStudentForm] = useState<StudentFormState>({
+    mode: 'create',
+    searchTerm: "",
+    selectedStudent: null,
+    searchResults: [],
+    isSearching: false
+  });
+
+  // Estado para el selector de fecha
+  const [isDatePickerOpen, setIsDatePickerOpen] = useState(false);
+
   // Cargar datos del usuario
   useEffect(() => {
     const fetchUserProfile = async () => {
@@ -99,8 +161,117 @@ const InterventionForm = () => {
     fetchUserProfile();
   }, [user]);
 
+  // Función para buscar estudiantes
+  const searchStudents = async (searchTerm: string) => {
+    setStudentForm(prev => ({...prev, isSearching: true}));
+    
+    try {
+      // Si no hay término de búsqueda, mostramos todos los estudiantes (limitados)
+      const query = supabase
+        .from('students')
+        .select('*')
+        .order('name', { ascending: true });
+      
+      // Si hay término de búsqueda, filtramos por nombre
+      if (searchTerm && searchTerm.trim().length >= 2) {
+        query.ilike('name', `%${searchTerm}%`);
+      }
+      
+      // Limitamos la cantidad de resultados
+      const { data, error } = await query.limit(20);
+      
+      if (error) throw error;
+      
+      setStudentForm(prev => ({
+        ...prev, 
+        searchResults: data || [],
+        isSearching: false
+      }));
+    } catch (error) {
+      console.error("Error al buscar estudiantes:", error);
+      setStudentForm(prev => ({...prev, isSearching: false, searchResults: []}));
+    }
+  };
+
+  // Efectuar la búsqueda cuando cambia el término de búsqueda
   useEffect(() => {
-    // Actualizar el ID del profesor cuando cambie el usuario
+    if (studentForm.mode === 'select') {
+    const timer = setTimeout(() => {
+        searchStudents(studentForm.searchTerm);
+      }, 300); // Reducimos el debounce a 300ms para mayor respuesta
+
+    return () => clearTimeout(timer);
+    }
+  }, [studentForm.searchTerm, studentForm.mode]);
+
+  // Cargar lista inicial de estudiantes al cambiar a modo selección
+  useEffect(() => {
+    if (studentForm.mode === 'select') {
+      searchStudents('');
+    }
+  }, [studentForm.mode]);
+
+  // Seleccionar un estudiante existente
+  const handleSelectStudent = (student: Student) => {
+    setStudentForm(prev => ({
+      ...prev,
+      selectedStudent: student,
+      searchTerm: "",
+      searchResults: []
+    }));
+    
+    setIntervention(prev => ({
+      ...prev,
+      student: {
+        id: student.id,
+        name: student.name,
+        grade: student.grade
+      }
+    }));
+  };
+
+  // Borrar la selección de estudiante
+  const clearStudentSelection = () => {
+    setStudentForm(prev => ({
+      ...prev,
+      selectedStudent: null,
+      searchTerm: ""
+    }));
+    
+    setIntervention(prev => ({
+      ...prev,
+      student: {
+        id: uuidv4(),
+        name: "",
+        grade: ""
+      }
+    }));
+  };
+
+  // Cambiar el modo del formulario (crear o seleccionar)
+  const switchStudentFormMode = (mode: 'create' | 'select') => {
+    setStudentForm(prev => ({
+      ...prev,
+      mode,
+      selectedStudent: null,
+      searchTerm: "",
+      searchResults: []
+    }));
+
+    if (mode === 'create') {
+      setIntervention(prev => ({
+        ...prev,
+        student: {
+          id: uuidv4(),
+          name: "",
+          grade: ""
+        }
+      }));
+    }
+  };
+
+  // Actualizar el ID del profesor cuando cambie el usuario
+  useEffect(() => {
     if (user?.id) {
       setIntervention(prev => ({
         ...prev,
@@ -264,12 +435,34 @@ const InterventionForm = () => {
           [studentField]: value,
         },
       });
+    } else if (name === "date") {
+      // Manejar la fecha si viene como string
+      try {
+        const newDate = value ? new Date(value) : new Date();
+        setIntervention({
+          ...intervention,
+          date: newDate
+        });
+      } catch (e) {
+        console.error("Error parsing date:", e);
+      }
     } else {
       setIntervention({
         ...intervention,
         [name]: value,
       });
     }
+  };
+
+  // Manejar cambio de fecha con el calendario
+  const handleDateChange = (date: Date | undefined) => {
+    if (date) {
+      setIntervention({
+        ...intervention,
+        date
+      });
+    }
+    setIsDatePickerOpen(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -423,123 +616,207 @@ const InterventionForm = () => {
     <div className="min-h-screen flex flex-col bg-gray-50">
       <Navbar />
       
-      <div className="container mx-auto px-4 py-8">
-        <div className="bg-white rounded-lg shadow-md p-6">
-          <h1 className="text-2xl font-bold mb-6">
-            {isEditing ? "Editar Intervención" : "Nueva Intervención"}
-          </h1>
+      <div className="container mx-auto px-4 py-6">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">
+              {isEditing ? "Editar Intervención" : "Nueva Intervención"}
+            </h1>
+            <p className="text-sm text-gray-600 mt-1">
+              {isEditing ? "Modifica los detalles" : "Completa la información"}
+            </p>
+          </div>
+          <Button 
+            variant="outline" 
+            onClick={() => navigate("/intervenciones")}
+            className="gap-1 text-sm h-9"
+          >
+            <X size={14} /> Cancelar
+          </Button>
+        </div>
 
-          {/* Detalles de la actividad seleccionada */}
+        <div className="grid grid-cols-1 gap-4">
+          {/* Detalles de la actividad seleccionada - Simplificado */}
           {activityDetails.name && (
-            <div className="mb-6 p-4 border rounded-lg bg-gray-50">
-              <h2 className="text-lg font-semibold mb-2">Actividad Seleccionada</h2>
-              <p className="font-medium">{activityDetails.name}</p>
-              <p className="text-gray-600 mt-2">{activityDetails.objective}</p>
-              
-              {activityDetails.materials.length > 0 && (
-                <div className="mt-2">
-                  <h3 className="font-medium">Materiales:</h3>
-                  <ul className="list-disc list-inside text-gray-600">
-                    {activityDetails.materials.map((material, index) => (
-                      <li key={index}>{material}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+            <div className="p-4 border rounded-lg bg-white shadow-sm">
+              <h3 className="font-medium text-primary mb-2 flex items-center gap-1">
+                <span className="bg-primary/10 p-1 rounded text-xs text-primary">Actividad</span>
+                {activityDetails.name}
+              </h3>
+              <p className="text-sm text-gray-700">{activityDetails.objective}</p>
             </div>
           )}
 
           {/* Formulario de intervención */}
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Datos del profesor */}
-              <div>
-                <h2 className="text-xl font-semibold mb-4 flex items-center">
-                  Datos del profesor
-                </h2>
-                <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="teacherName">Nombre del profesor</Label>
-                    <div className="p-2 bg-gray-100 border rounded-md text-gray-800">
-                      {teacherName || user?.email || "Usuario actual"}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="bg-white border rounded-lg shadow-sm divide-y">
+              {/* Sección: Profesor */}
+              <div className="p-4">
+                <div className="flex items-center mb-2">
+                  <User size={16} className="text-primary mr-2" />
+                  <h3 className="font-medium text-gray-700">Profesor/a</h3>
+                </div>
+                <p className="text-sm">{teacherName || user?.email || "Usuario actual"}</p>
+              </div>
+
+              {/* Sección: Fecha */}
+              <div className="p-4">
+                <Label htmlFor="date" className="mb-1.5 block text-sm font-medium">Fecha</Label>
+                <Popover open={isDatePickerOpen} onOpenChange={setIsDatePickerOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className="w-full justify-start text-left font-normal text-sm h-9"
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {intervention.date ? (
+                        format(intervention.date, "PP", {locale: es})
+                      ) : (
+                        <span>Seleccionar fecha</span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <CalendarComponent
+                      mode="single"
+                      selected={intervention.date}
+                      onSelect={handleDateChange}
+                      initialFocus
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              {/* Sección: Estudiante */}
+              <div className="p-4">
+                <div className="flex justify-between items-center mb-3">
+                  <h3 className="font-medium text-gray-700">Estudiante</h3>
+                  <Tabs value={studentForm.mode} onValueChange={(value) => switchStudentFormMode(value as 'create' | 'select')} className="w-auto">
+                    <TabsList className="grid grid-cols-2 h-8">
+                      <TabsTrigger value="create" className="text-xs px-2">Nuevo</TabsTrigger>
+                      <TabsTrigger value="select" className="text-xs px-2">Buscar</TabsTrigger>
+                    </TabsList>
+                  </Tabs>
+                </div>
+                
+                {studentForm.mode === 'create' ? (
+                  <div className="space-y-3">
+                    <div>
+                      <Input
+                        id="student.name"
+                        name="student.name"
+                        value={intervention.student.name}
+                        onChange={handleInputChange}
+                        placeholder="Nombre del estudiante"
+                        required
+                        className="text-sm h-9"
+                      />
                     </div>
-                    <p className="text-xs text-gray-500 mt-1">
-                      Se usará tu cuenta actual para esta intervención
-                    </p>
+                    <div>
+                      <Input
+                        id="student.grade"
+                        name="student.grade"
+                        value={intervention.student.grade}
+                        onChange={handleInputChange}
+                        placeholder="Grado/Curso"
+                        required
+                        className="text-sm h-9"
+                      />
+                    </div>
                   </div>
-                </div>
-              </div>
-
-              {/* Datos del estudiante */}
-              <div>
-                <h2 className="text-xl font-semibold mb-4 flex items-center">
-                  Datos del estudiante
-                </h2>
-                <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="student.name">Nombre del estudiante</Label>
-                    <Input
-                      id="student.name"
-                      name="student.name"
-                      value={intervention.student.name}
-                      onChange={handleInputChange}
-                      placeholder="Ej. Ana López"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="student.grade">Grado/Curso</Label>
-                    <Input
-                      id="student.grade"
-                      name="student.grade"
-                      value={intervention.student.grade}
-                      onChange={handleInputChange}
-                      placeholder="Ej. 3° Básico"
-                      required
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Observaciones */}
-            <div>
-              <Label htmlFor="observations">Observaciones</Label>
-              <Textarea
-                id="observations"
-                name="observations"
-                value={intervention.observations}
-                onChange={handleInputChange}
-                placeholder="Agregue observaciones, recomendaciones o notas específicas para esta intervención..."
-                rows={5}
-                className="resize-none"
-              />
-            </div>
-
-            {/* Botones de acción */}
-            <div className="flex justify-end space-x-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => navigate("/intervenciones")}
-                disabled={isSubmitting}
-              >
-                Cancelar
-              </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting ? (
-                  <span className="flex items-center">
-                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Procesando...
-                  </span>
                 ) : (
-                  <>{isEditing ? "Actualizar" : "Crear"} Intervención</>
+                  <div>
+                    {studentForm.selectedStudent ? (
+                      <div className="flex items-center justify-between bg-primary/5 rounded-md p-2 text-sm">
+                        <div>
+                          <p className="font-medium">{studentForm.selectedStudent.name}</p>
+                          <p className="text-xs text-gray-600">{studentForm.selectedStudent.grade}</p>
+                        </div>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          onClick={clearStudentSelection}
+                          className="h-7 w-7 p-0 rounded-full"
+                        >
+                          <X size={14} />
+                          <span className="sr-only">Borrar selección</span>
+                        </Button>
+                      </div>
+                    ) : (
+                      <div>
+                        <div className="flex items-center border rounded-md px-2 py-1.5 focus-within:ring-1 focus-within:ring-primary mb-2">
+                          <Search className="h-3.5 w-3.5 text-gray-400 mr-2 flex-shrink-0" />
+                          <input
+                            type="text"
+                            placeholder="Buscar estudiante..."
+                            className="flex-1 outline-none text-sm"
+                            value={studentForm.searchTerm}
+                            onChange={(e) => setStudentForm(prev => ({...prev, searchTerm: e.target.value}))}
+                          />
+                          {studentForm.isSearching && (
+                            <div className="animate-spin h-3 w-3 border-2 border-primary border-t-transparent rounded-full"></div>
+                          )}
+                        </div>
+                        
+                        {studentForm.searchResults.length > 0 ? (
+                          <div className="border rounded-md max-h-40 overflow-y-auto">
+                            <ul className="divide-y text-sm">
+                            {studentForm.searchResults.map(student => (
+                              <li 
+                                key={student.id}
+                                  className="p-2 cursor-pointer hover:bg-gray-50 transition-colors"
+                                onClick={() => handleSelectStudent(student)}
+                              >
+                                <p className="font-medium">{student.name}</p>
+                                <p className="text-xs text-gray-600">{student.grade}</p>
+                              </li>
+                            ))}
+                          </ul>
+                          </div>
+                        ) : (
+                          <div className="text-center py-3 text-sm text-gray-500 bg-gray-50 rounded-md">
+                            {studentForm.searchTerm && !studentForm.isSearching ? (
+                              "No se encontraron estudiantes"
+                            ) : (
+                              studentForm.isSearching ? "Buscando..." : "Selecciona un estudiante"
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 )}
-              </Button>
+              </div>
+
+              {/* Sección: Observaciones */}
+              <div className="p-4">
+                <Label htmlFor="observations" className="mb-1.5 block text-sm font-medium">Observaciones</Label>
+                <Textarea
+                  id="observations"
+                  name="observations"
+                  value={intervention.observations}
+                  onChange={handleInputChange}
+                  placeholder="Observaciones o notas específicas..."
+                  rows={3}
+                  className="resize-none text-sm min-h-[80px]"
+                />
+              </div>
             </div>
+
+            {/* Botón de envío */}
+            <Button type="submit" className="w-full" disabled={isSubmitting}>
+              {isSubmitting ? (
+                <span className="flex items-center justify-center">
+                  <svg className="animate-spin mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Procesando...
+                </span>
+              ) : (
+                <>{isEditing ? "Actualizar" : "Crear"} Intervención</>
+              )}
+            </Button>
           </form>
         </div>
       </div>

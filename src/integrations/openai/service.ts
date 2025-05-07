@@ -62,7 +62,7 @@ export const AVAILABLE_MODELS: ModelInfo[] = [
 ];
 
 // Modelo predeterminado
-export const DEFAULT_MODEL: OpenAIModel = 'gpt-4.1';
+export const DEFAULT_MODEL: OpenAIModel = 'gpt-4.1-nano';
 
 // Sistema prompt que define el contexto para el asistente
 const SYSTEM_PROMPT = `
@@ -74,10 +74,33 @@ Debes seguir estas reglas:
 1. Las actividades deben ser detalladas y específicas para abordar las barreras indicadas.
 2. Debes considerar los estilos de aprendizaje proporcionados.
 3. Si tienes información del estudiante, personaliza aún más la actividad.
-4. El formato de la actividad debe incluir: nombre, objetivo, materiales y desarrollo (pasos con tiempos estimados).
-5. Sé creativo pero práctico, proponiendo actividades realizables en contextos educativos reales.
-6. Presta especial atención a cualquier descripción personalizada proporcionada por el educador.
-7. Responde siempre en español.
+4. Responde siempre en español.
+
+FORMATO OBLIGATORIO:
+Debes estructurar la actividad siguiendo EXACTAMENTE este formato:
+
+Nombre: [Nombre creativo y descriptivo de la actividad]
+
+Objetivo: [Objetivo pedagógico claro y medible]
+
+Materiales:
+- [Material 1]
+- [Material 2]
+- [Material 3]
+...
+
+Desarrollo:
+La actividad debe incluir una descripción general seguida de pasos numerados, cada uno con duración estimada:
+
+Paso 1: [Descripción detallada] (10-15 minutos)
+Paso 2: [Descripción detallada] (15-20 minutos)
+Paso 3: [Descripción detallada] (20-25 minutos)
+...
+
+Es CRUCIAL que incluyas al menos 3-5 pasos con sus respectivas duraciones entre paréntesis.
+Cada paso debe ser detallado y específico, explicando qué deben hacer tanto el docente como los estudiantes.
+
+Recuerda ser creativo pero práctico, proponiendo actividades realizables en contextos educativos reales.
 `;
 
 /**
@@ -146,7 +169,8 @@ export const generateActivity = async (params: ActivityGenerationParams): Promis
   try {
     const requestTimestamp = Date.now();
     const messages = createContextMessages(params);
-    const selectedModel = params.selectedModel || DEFAULT_MODEL;
+    // Forzar el uso del modelo nano siempre
+    const selectedModel = 'gpt-4.1-nano';
     
     const response = await openai.chat.completions.create({
       model: selectedModel,
@@ -168,7 +192,7 @@ export const generateActivity = async (params: ActivityGenerationParams): Promis
       totalTokens: response.usage?.total_tokens || 0,
       model: response.model
     };
-    
+    console.log(statistics);
     // Analizar el texto para extraer la estructura de la actividad
     const activity = parseActivityFromText(activityText);
     
@@ -185,8 +209,8 @@ export const generateActivity = async (params: ActivityGenerationParams): Promis
 const parseActivityFromText = (text: string): GeneratedActivity => {
   // Extraer el nombre (generalmente es la primera línea o después de "Nombre:")
   const nameMatch = text.match(/(?:Nombre|Título|Actividad):\s*([^\n]+)/i) || 
-                  text.match(/^#\s*([^\n]+)/m) ||
-                  text.match(/^([^\n]+)/);
+                   text.match(/^#\s*([^\n]+)/m) ||
+                   text.match(/^([^\n]+)/);
   const name = nameMatch ? nameMatch[1].trim() : 'Actividad Generada';
   
   // Extraer el objetivo
@@ -207,17 +231,52 @@ const parseActivityFromText = (text: string): GeneratedActivity => {
   // Extraer desarrollo/pasos
   const developmentMatch = text.match(/(?:Desarrollo|Procedimiento|Pasos|Actividades):\s*([\s\S]+)$/i);
   let steps: Array<{ description: string; duration: string }> = [];
+  let developmentDescription = "";
   
   if (developmentMatch && developmentMatch[1]) {
-    const stepsText = developmentMatch[1];
-    const stepMatches = stepsText.matchAll(/(?:Paso)?\s*\d+\.?\s*([^(]+)(?:\(([^)]+)\))?/gi);
+    // Extraer la descripción general del desarrollo (si existe)
+    const descriptionEndIndex = developmentMatch[1].search(/\n\s*Paso\s*\d+:|^\s*Paso\s*\d+:/im);
+    if (descriptionEndIndex > 0) {
+      developmentDescription = developmentMatch[1].substring(0, descriptionEndIndex).trim();
+    }
     
-    for (const match of stepMatches) {
-      const description = match[1]?.trim() || '';
-      const duration = match[2]?.trim() || '15-20 minutos';
+    // Buscar pasos numerados con sus duraciones
+    const stepMatches = Array.from(
+      developmentMatch[1].matchAll(/(?:Paso\s*)?(\d+)[.:]\s*([^(]+)\s*\(([^)]+)\)/gi)
+    );
+    
+    if (stepMatches.length > 0) {
+      for (const match of stepMatches) {
+        const description = match[2]?.trim() || '';
+        const duration = match[3]?.trim() || '15-20 minutos';
+        
+        if (description) {
+          steps.push({ description, duration });
+        }
+      }
+    } else {
+      // Alternativa: buscar párrafos que podrían ser pasos
+      const paragraphs = developmentMatch[1]
+        .split(/\n\n+/)
+        .filter(p => p.trim().length > 0 && !p.trim().startsWith('Paso'));
       
-      if (description) {
-        steps.push({ description, duration });
+      if (paragraphs.length > 1) {
+        // Usamos los párrafos como pasos separados
+        paragraphs.forEach((paragraph, index) => {
+          // Intentar extraer duración si existe en formato "(X minutos)"
+          const durationMatch = paragraph.match(/\((\d+(?:-\d+)?\s*(?:minutos?|horas?))\)/i);
+          const duration = durationMatch ? durationMatch[1] : `${(index + 1) * 10}-${(index + 1) * 10 + 5} minutos`;
+          
+          // Eliminar la duración del texto si existe
+          let description = paragraph.trim();
+          if (durationMatch) {
+            description = description.replace(durationMatch[0], '').trim();
+          }
+          
+          if (description) {
+            steps.push({ description, duration });
+          }
+        });
       }
     }
   }
@@ -235,7 +294,10 @@ const parseActivityFromText = (text: string): GeneratedActivity => {
     name,
     objective,
     materials: materials.length > 0 ? materials : ['Materiales según necesidades específicas'],
-    development: { steps }
+    development: { 
+      description: developmentDescription,
+      steps 
+    }
   };
 };
 
@@ -257,8 +319,9 @@ export const chatWithEducationalAssistant = async (
       messages.unshift({ role: 'system', content: SYSTEM_PROMPT });
     }
     
+    // Forzar el uso del modelo nano
     const response = await openai.chat.completions.create({
-      model: selectedModel,
+      model: 'gpt-4.1-nano',
       messages,
       temperature: 0.7,
       max_tokens: 1000,
