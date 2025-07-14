@@ -1,6 +1,17 @@
-import { useMemo } from 'react';
+import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Tooltip, Legend, PieChart, Pie, Cell } from 'recharts';
+import { 
+  BarChart, 
+  Bar, 
+  XAxis, 
+  YAxis, 
+  ResponsiveContainer, 
+  Tooltip, 
+  Legend, 
+  PieChart, 
+  Pie, 
+  Cell 
+} from 'recharts';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type BarrierData = {
@@ -30,7 +41,7 @@ interface DashboardStatsProps {
  */
 const DashboardStats = ({ barrierData, learningStyleData, activityData }: DashboardStatsProps) => {
   // Colores para los gráficos
-  const CHART_COLORS = useMemo(() => ({
+  const CHART_COLORS = React.useMemo(() => ({
     primary: '#3b82f6',
     secondary: '#10b981',
     accent: '#f97316',
