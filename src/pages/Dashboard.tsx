@@ -10,6 +10,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PlusCircle, BookOpen, Brain, Users, Clock, AlertCircle, Activity, ChevronRight, BarChart2, User } from "lucide-react";
 import DashboardStats from "@/components/DashboardStats";
+import DeviceDiagnostics from "@/components/DeviceDiagnostics";
 
 // Tipos para los datos extraídos de la base de datos
 type ActivityCount = {
@@ -98,10 +99,21 @@ const Dashboard = () => {
   const [activityByMonth, setActivityByMonth] = useState<ActivityByMonth[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [profileData, setProfileData] = useState<ProfileData | null>(null);
+  const [showDiagnostics, setShowDiagnostics] = useState(false);
 
   useEffect(() => {
     const fetchProfileData = async () => {
-      if (!user) return;
+      if (!user) {
+        console.log('No user available for profile fetch');
+        return;
+      }
+      
+      console.log('Fetching profile for user:', {
+        userId: user.id,
+        email: user.email,
+        userAgent: navigator.userAgent,
+        timestamp: new Date().toISOString()
+      });
       
       try {
         const { data, error } = await supabase
@@ -113,6 +125,7 @@ const Dashboard = () => {
         if (error) {
           console.error('Error fetching profile:', error);
         } else if (data) {
+          console.log('Profile found:', data);
           setProfileData(data);
         } else {
           // Si no existe el perfil, crearlo automáticamente
@@ -136,11 +149,12 @@ const Dashboard = () => {
               name: user.user_metadata?.name || null
             });
           } else {
+            console.log('Profile created successfully:', newProfile);
             setProfileData(newProfile);
           }
         }
       } catch (error) {
-        console.error('Error:', error);
+        console.error('Error in profile fetch:', error);
         // Usar datos del usuario de auth como fallback
         setProfileData({
           id: user.id,
@@ -621,6 +635,25 @@ const Dashboard = () => {
             </div>
           </Button>
         </div>
+
+        {/* Botón de diagnóstico */}
+        <div className="flex justify-center mb-6">
+          <Button 
+            onClick={() => setShowDiagnostics(!showDiagnostics)} 
+            variant="outline"
+            className="text-amber-600 border-amber-200 hover:bg-amber-50"
+          >
+            <AlertTriangle className="h-4 w-4 mr-2" />
+            {showDiagnostics ? 'Ocultar' : 'Mostrar'} Diagnóstico del Dispositivo
+          </Button>
+        </div>
+
+        {/* Componente de diagnóstico */}
+        {showDiagnostics && (
+          <div className="mb-8">
+            <DeviceDiagnostics />
+          </div>
+        )}
 
         {/* Layout flexible para estadísticas y actividad reciente */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
