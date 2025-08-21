@@ -145,11 +145,17 @@ const InterventionForm = () => {
             .from('profiles')
             .select('name')
             .eq('id', user.id)
-            .single();
+            .maybeSingle();
             
-          if (error) throw error;
-          if (data) {
+          if (error) {
+            console.error("Error al obtener perfil del usuario:", error);
+            setTeacherName(user.email || "");
+          } else if (data) {
             setTeacherName(data.name || user.email || "");
+          } else {
+            // Si no existe el perfil, usar el email del usuario
+            console.log('Profile not found, using email as fallback');
+            setTeacherName(user.email || "Usuario");
           }
         } catch (error) {
           console.error("Error al obtener perfil del usuario:", error);

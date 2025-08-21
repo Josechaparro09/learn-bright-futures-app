@@ -108,15 +108,45 @@ const Dashboard = () => {
           .from('profiles')
           .select('id, name, email')
           .eq('id', user.id)
-          .single();
+          .maybeSingle();
           
         if (error) {
           console.error('Error fetching profile:', error);
         } else if (data) {
           setProfileData(data);
+        } else {
+          // Si no existe el perfil, crearlo automáticamente
+          console.log('Profile not found, creating one...');
+          const { data: newProfile, error: createError } = await supabase
+            .from('profiles')
+            .insert([{
+              id: user.id,
+              email: user.email || '',
+              name: user.user_metadata?.name || user.email || 'Usuario'
+            }])
+            .select()
+            .single();
+            
+          if (createError) {
+            console.error('Error creating profile:', createError);
+            // Usar datos del usuario de auth como fallback
+            setProfileData({
+              id: user.id,
+              email: user.email || '',
+              name: user.user_metadata?.name || null
+            });
+          } else {
+            setProfileData(newProfile);
+          }
         }
       } catch (error) {
         console.error('Error:', error);
+        // Usar datos del usuario de auth como fallback
+        setProfileData({
+          id: user.id,
+          email: user.email || '',
+          name: user.user_metadata?.name || null
+        });
       }
     };
     

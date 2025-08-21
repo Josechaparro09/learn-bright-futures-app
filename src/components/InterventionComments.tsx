@@ -250,7 +250,7 @@ const InterventionComments = ({ interventionId }: InterventionCommentsProps) => 
           .from('profiles')
           .select('name, lastname, subject')
           .eq('id', currentUser.id)
-          .single();
+          .maybeSingle();
           
         if (profileError) {
           console.error('Error al obtener perfil:', profileError);
