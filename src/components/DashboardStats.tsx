@@ -19,16 +19,23 @@ type ActivityData = {
   count: number;
 }
 
+type SubjectData = {
+  name: string;
+  count: number;
+  color: string;
+}
+
 interface DashboardStatsProps {
   barrierData: BarrierData[];
   learningStyleData: LearningStyleData[];
   activityData: ActivityData[];
+  subjectData: SubjectData[]; // Agregar datos de áreas
 }
 
 /**
  * Componente para mostrar estadísticas en el dashboard
  */
-const DashboardStats = ({ barrierData, learningStyleData, activityData }: DashboardStatsProps) => {
+const DashboardStats = ({ barrierData, learningStyleData, activityData, subjectData }: DashboardStatsProps) => {
   // Colores para los gráficos
   const CHART_COLORS = useMemo(() => ({
     primary: '#3b82f6',
@@ -45,6 +52,7 @@ const DashboardStats = ({ barrierData, learningStyleData, activityData }: Dashbo
           <TabsList>
             <TabsTrigger value="barriers">Barreras</TabsTrigger>
             <TabsTrigger value="styles">Estilos</TabsTrigger>
+            <TabsTrigger value="subjects">Áreas</TabsTrigger>
             <TabsTrigger value="activities">Actividades</TabsTrigger>
           </TabsList>
         </div>
@@ -116,6 +124,42 @@ const DashboardStats = ({ barrierData, learningStyleData, activityData }: Dashbo
           </div>
           <p className="text-sm text-gray-500 text-center mt-2">
             Distribución de actividades por estilo de aprendizaje
+          </p>
+        </TabsContent>
+
+        <TabsContent value="subjects" className="mt-0">
+          <div className="h-[300px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={subjectData}
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={100}
+                  innerRadius={60}
+                  fill="#8884d8"
+                  dataKey="count"
+                  nameKey="name"
+                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                  labelLine={true}
+                >
+                  {subjectData.map((entry, index) => (
+                    <Cell 
+                      key={`cell-${index}`} 
+                      fill={entry.color || CHART_COLORS.muted} 
+                    />
+                  ))}
+                </Pie>
+                <Tooltip
+                  formatter={(value) => [`${value} actividades`, 'Cantidad']}
+                  contentStyle={{ backgroundColor: '#fff', border: '1px solid #ccc', borderRadius: '6px' }}
+                />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+          <p className="text-sm text-gray-500 text-center mt-2">
+            Distribución de actividades por área académica
           </p>
         </TabsContent>
 

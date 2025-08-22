@@ -28,17 +28,9 @@ interface ActivityFromDB {
   id: string;
   name: string;
   objective: string;
-  materials: string | string[];
-  development: string | {
-    description: string;
-    steps: Array<{
-      id: string;
-      description: string;
-      durationMin: number;
-      durationMax: number;
-      durationUnit: string;
-    }>;
-  };
+  materials: any;
+  development: any;
+  subject_id?: string;
 }
 
 interface Barrier {
@@ -51,10 +43,16 @@ interface LearningStyle {
   name: string;
 }
 
+interface Subject {
+  id: string;
+  name: string;
+}
+
 const Activities = () => {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [barriers, setBarriers] = useState<Barrier[]>([]);
   const [learningStyles, setLearningStyles] = useState<LearningStyle[]>([]);
+  const [subjects, setSubjects] = useState<Subject[]>([]); // Agregar estado para subjects
   const [searchTerm, setSearchTerm] = useState("");
   const [activeFilters, setActiveFilters] = useState<{type: string, id: string, name: string}[]>([]);
   const [expandedActivities, setExpandedActivities] = useState<Record<string, boolean>>({});
@@ -81,6 +79,14 @@ const Activities = () => {
         
         if (stylesError) throw stylesError;
         setLearningStyles(stylesData);
+
+        // Obtener áreas/subjects
+        const { data: subjectsData, error: subjectsError } = await supabase
+          .from('subjects')
+          .select('*');
+        
+        if (subjectsError) throw subjectsError;
+        setSubjects(subjectsData || []);
 
         // Obtener actividades
         const { data: activitiesData, error: activitiesError } = await supabase
@@ -146,7 +152,8 @@ const Activities = () => {
               materials,
               development,
               barriers: activityBarriers.map(ab => ab.barrier_id),
-              learningStyles: activityStyles.map(als => als.learning_style_id)
+              learningStyles: activityStyles.map(als => als.learning_style_id),
+              subject_id: activity.subject_id // Incluir subject_id
             };
           })
         );
@@ -428,6 +435,16 @@ const Activities = () => {
                     
                   <CardContent className="p-4 pt-2">
                     <p className="text-gray-700 mb-3 line-clamp-2">{activity.objective}</p>
+                    
+                    {/* Mostrar área de la actividad */}
+                    {activity.subject_id && (
+                      <div className="mb-3">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          <BookOpen size={12} className="mr-1" />
+                          {subjects.find(s => s.id === activity.subject_id)?.name || 'Área no especificada'}
+                        </span>
+                      </div>
+                    )}
                     
                     <div className="flex flex-wrap gap-1.5 mb-3">
                       {activity.barriers.slice(0, 2).map((barrierId) => (

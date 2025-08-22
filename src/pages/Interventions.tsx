@@ -65,6 +65,12 @@ interface SupabaseActivity {
   id: string;
   name: string;
   objective: string;
+  subject_id?: string; // Agregar campo para el área
+}
+
+interface SupabaseSubject {
+  id: string;
+  name: string;
 }
 
 interface SupabaseBarrier {
@@ -89,6 +95,7 @@ interface CompleteIntervention {
   };
   activity: string;
   activityName: string;
+  subjectName?: string; // Agregar campo para el área de la actividad
   barriers: string[];
   learningStyles: string[];
   date: Date;
@@ -102,6 +109,7 @@ const Interventions = () => {
   const [learningStyles, setLearningStyles] = useState<SupabaseLearningStyle[]>([]);
   const [teachers, setTeachers] = useState<SupabaseProfile[]>([]);
   const [students, setStudents] = useState<SupabaseStudent[]>([]);
+  const [subjects, setSubjects] = useState<SupabaseSubject[]>([]); // Estado para áreas/subjects
   
   const [searchTerm, setSearchTerm] = useState("");
   const [expandedInterventions, setExpandedInterventions] = useState<Record<string, boolean>>({});
@@ -109,6 +117,7 @@ const Interventions = () => {
   const [teacherFilter, setTeacherFilter] = useState<string>("");
   const [activityFilter, setActivityFilter] = useState<string>("");
   const [studentFilter, setStudentFilter] = useState<string>("");
+  const [areaFilter, setAreaFilter] = useState<string>(""); // Agregar estado para filtro de área
   const [isLoading, setIsLoading] = useState(true);
   const [activeFilters, setActiveFilters] = useState<{type: string, value: string, label: string}[]>([]);
   
@@ -122,7 +131,7 @@ const Interventions = () => {
         // 1. Obtener actividades
         const { data: activityData, error: activityError } = await supabase
           .from('activities')
-          .select('id, name, objective');
+          .select('id, name, objective, subject_id');
         
         if (activityError) throw activityError;
         setActivities(activityData || []);
@@ -160,6 +169,14 @@ const Interventions = () => {
         if (studentsError) throw studentsError;
         setStudents(studentsData || []);
 
+        // 6. Obtener áreas/subjects para mostrar en las intervenciones
+        const { data: subjectsData, error: subjectsError } = await supabase
+          .from('subjects')
+          .select('id, name');
+        
+        if (subjectsError) throw subjectsError;
+        setSubjects(subjectsData || []);
+
         // 6. Obtener intervenciones
         const { data: interventionData, error: interventionError } = await supabase
           .from('interventions')
@@ -167,6 +184,8 @@ const Interventions = () => {
           .order('created_at', { ascending: false });
         
         if (interventionError) throw interventionError;
+
+        console.log('Intervenciones obtenidas de la BD:', interventionData); // Log de depuración
 
         // 7. Procesar cada intervención para obtener datos relacionados
         const processedInterventions = await Promise.all((interventionData || []).map(async (intervention: SupabaseIntervention) => {
@@ -203,6 +222,19 @@ const Interventions = () => {
 
           // Buscar el profesor
           const teacher = profileData?.find(p => p.id === intervention.teacher_id);
+          
+          // Buscar el área/subject para la actividad
+          const activity = activityData?.find(a => a.id === intervention.activity_id);
+          const subjectName = activity ? subjectsData?.find(s => s.id === activity.subject_id)?.name : "Área desconocida";
+
+          console.log('Intervención procesada:', { // Log de depuración
+            id: intervention.id,
+            teacher_id: intervention.teacher_id,
+            teacher: teacher,
+            teacherName: teacher?.name || teacher?.email || "Profesor desconocido",
+            activity: activity,
+            subjectName: subjectName
+          });
 
           return {
             id: intervention.id,
@@ -214,7 +246,8 @@ const Interventions = () => {
               grade: studentData?.grade || ""
             },
             activity: intervention.activity_id,
-            activityName: activityData?.find(a => a.id === intervention.activity_id)?.name || "Actividad desconocida",
+            activityName: activity?.name || "Actividad desconocida",
+            subjectName: subjectName,
             barriers: interventionBarriers?.map(b => b.barrier_id) || [],
             learningStyles: interventionStyles?.map(s => s.learning_style_id) || [],
             date: new Date(intervention.date),
@@ -222,6 +255,7 @@ const Interventions = () => {
           };
         }));
 
+        console.log('Intervenciones procesadas:', processedInterventions); // Log de depuración
         setInterventions(processedInterventions);
       } catch (error) {
         console.error("Error al cargar datos:", error);
@@ -307,6 +341,31 @@ const Interventions = () => {
     setStudentFilter("");
   };
 
+  const applyAreaFilter = (subjectId: string) => {
+    if (!subjectId) {
+      // Si no hay área seleccionada, limpiar el filtro
+      const updatedFilters = activeFilters.filter(f => f.type !== 'area');
+      setActiveFilters(updatedFilters);
+      setAreaFilter("");
+      return;
+    }
+
+    const subject = subjects.find(s => s.id === subjectId);
+    if (!subject) return;
+
+    // Remover filtro previo si existe
+    const updatedFilters = activeFilters.filter(f => f.type !== 'area');
+    
+    // Agregar nuevo filtro
+    setActiveFilters([...updatedFilters, {
+      type: 'area',
+      value: subject.name, // Usar el nombre del área para el filtro
+      label: `Área: ${subject.name}`
+    }]);
+    
+    setAreaFilter(subjectId);
+  };
+
   const removeFilter = (filterType: string) => {
     setActiveFilters(activeFilters.filter(f => f.type !== filterType));
   };
@@ -323,7 +382,8 @@ const Interventions = () => {
       searchTerm === "" ||
       intervention.teacherName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       intervention.student.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      intervention.activityName.toLowerCase().includes(searchTerm.toLowerCase());
+      intervention.activityName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (intervention.subjectName && intervention.subjectName.toLowerCase().includes(searchTerm.toLowerCase())); // Agregar búsqueda por área
 
     // Filtro por profesor
     const teacherFilterItem = activeFilters.find(f => f.type === 'teacher');
@@ -340,8 +400,39 @@ const Interventions = () => {
     const matchesStudent = !studentFilterItem ||
       intervention.student.id === studentFilterItem.value;
 
-    return matchesSearch && matchesTeacher && matchesActivity && matchesStudent;
+    // Filtro por área
+    const areaFilterItem = activeFilters.find(f => f.type === 'area');
+    const matchesArea = !areaFilterItem ||
+      intervention.subjectName === areaFilterItem.value;
+
+    const result = matchesSearch && matchesTeacher && matchesActivity && matchesStudent && matchesArea;
+    
+    // Log de depuración para la primera intervención
+    if (interventions.indexOf(intervention) === 0) {
+      console.log('Filtrado de intervención:', {
+        intervention: intervention.teacherName,
+        searchTerm,
+        matchesSearch,
+        teacherFilter: teacherFilterItem?.value,
+        matchesTeacher,
+        areaFilter: areaFilterItem?.value,
+        matchesArea,
+        result
+      });
+    }
+
+    return result;
   });
+
+  // Log de depuración para ver el estado de las intervenciones
+  useEffect(() => {
+    console.log('Estado actual de intervenciones:', {
+      total: interventions.length,
+      filtered: filteredInterventions.length,
+      activeFilters: activeFilters.length,
+      searchTerm
+    });
+  }, [interventions, filteredInterventions, activeFilters, searchTerm]);
 
   // Función para obtener nombre de barrera por ID
   const getBarrierName = (id: string) => {
@@ -420,7 +511,7 @@ const Interventions = () => {
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
               <input
                 type="text"
-                  placeholder="Buscar por nombre de estudiante, profesor o actividad..."
+                  placeholder="Buscar por nombre de estudiante, profesor, actividad o área..."
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary/70"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -475,7 +566,34 @@ const Interventions = () => {
                           <SelectContent className="max-h-56 overflow-y-auto">
                             {activities.map(activity => (
                               <SelectItem key={activity.id} value={activity.id}>
-                          {activity.name}
+                                <div className="flex flex-col">
+                                  <span>{activity.name}</span>
+                                  {activity.subject_id && (
+                                    <span className="text-xs text-gray-500">
+                                      {subjects.find(s => s.id === activity.subject_id)?.name || 'Sin área'}
+                                    </span>
+                                  )}
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-sm text-gray-700">Área</label>
+                        <Select
+                          value={areaFilter}
+                          onValueChange={(value) => applyAreaFilter(value)}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Seleccionar área" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="">Todas las áreas</SelectItem>
+                            {subjects.map(subject => (
+                              <SelectItem key={subject.id} value={subject.id}>
+                                {subject.name}
                               </SelectItem>
                             ))}
                           </SelectContent>
@@ -573,7 +691,7 @@ const Interventions = () => {
             <div className="space-y-4">
               {filteredInterventions.length > 0 && (
                 <p className="text-sm text-gray-500 mb-2">
-                  Mostrando {filteredInterventions.length} {filteredInterventions.length === 1 ? 'intervención' : 'intervenciones'}
+                  Mostrando {filteredInterventions.length} {filteredInterventions.length === 1 ? 'intervención' : 'intervenciones'} de {interventions.length} totales
                 </p>
               )}
               {filteredInterventions.map((intervention) => (
@@ -645,7 +763,17 @@ const Interventions = () => {
                         </div>
                         <div className="flex-1">
                           <div className="flex items-center justify-between">
-                            <p className="text-gray-800 font-medium">{intervention.activityName}</p>
+                            <div>
+                              <p className="text-gray-800 font-medium">{intervention.activityName}</p>
+                              {intervention.subjectName && (
+                                <div className="mt-1">
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                    <BookOpen size={10} className="mr-1" />
+                                    {intervention.subjectName}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
                         <Dialog>
                           <DialogTrigger asChild>
                             <Button 
@@ -721,6 +849,18 @@ const Interventions = () => {
                                   {getBarrierName(barrierId)}
                                 </span>
                               ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {intervention.subjectName && (
+                          <div className="mb-3">
+                            <h4 className="font-medium text-gray-900 text-sm">Área Académica:</h4>
+                            <div className="mt-1">
+                              <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                <BookOpen size={12} className="mr-1" />
+                                {intervention.subjectName}
+                              </span>
                             </div>
                           </div>
                         )}

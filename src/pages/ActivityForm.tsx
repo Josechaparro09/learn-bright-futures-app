@@ -44,6 +44,7 @@ interface Activity {
   materials: string[];
   barriers: string[];
   learningStyles: string[];
+  subject_id?: string; // Agregar campo para área
   development: {
     description: string;
     steps: {
@@ -66,6 +67,11 @@ interface LearningStyle {
   name: string;
 }
 
+interface Subject {
+  id: string;
+  name: string;
+}
+
 interface ActivityFormProps {
   isIntervention?: boolean;
 }
@@ -79,6 +85,7 @@ const ActivityForm = ({ isIntervention = false }: ActivityFormProps) => {
   
   const [barriers, setBarriers] = useState<Barrier[]>([]);
   const [learningStyles, setLearningStyles] = useState<LearningStyle[]>([]);
+  const [subjects, setSubjects] = useState<Subject[]>([]); // Agregar estado para subjects
   const [activities, setActivities] = useState<Activity[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -90,6 +97,7 @@ const ActivityForm = ({ isIntervention = false }: ActivityFormProps) => {
     materials: [""],
     barriers: [],
     learningStyles: [],
+    subject_id: "", // Agregar campo vacío
     development: {
       description: "",
       steps: [
@@ -139,6 +147,15 @@ const ActivityForm = ({ isIntervention = false }: ActivityFormProps) => {
         if (stylesError) throw stylesError;
         setLearningStyles(stylesData || []);
         
+        // Cargar áreas
+        const { data: subjectsData, error: subjectsError } = await supabase
+          .from("subjects")
+          .select("id, name")
+          .order("name");
+          
+        if (subjectsError) throw subjectsError;
+        setSubjects(subjectsData || []);
+
         // Cargar actividades
         const { data: activitiesData, error: activitiesError } = await supabase
           .from("activities")
@@ -409,6 +426,7 @@ const ActivityForm = ({ isIntervention = false }: ActivityFormProps) => {
     const missingFields = [];
     if (!activity.name.trim()) missingFields.push("Nombre de la actividad");
     if (!activity.objective.trim()) missingFields.push("Objetivo pedagógico");
+    if (!activity.subject_id) missingFields.push("Área/Asignatura");
     if (activity.barriers.length === 0) missingFields.push("Barreras de aprendizaje");
     if (activity.learningStyles.length === 0) missingFields.push("Estilos de aprendizaje");
     if (!activity.development.description.trim()) missingFields.push("Descripción del desarrollo");
@@ -432,6 +450,7 @@ const ActivityForm = ({ isIntervention = false }: ActivityFormProps) => {
         objective: activity.objective,
         materials: activity.materials.filter(m => m.trim()),
         development: activity.development,
+        subject_id: activity.subject_id, // Incluir subject_id
         created_by: user?.id || ''
       };
       
@@ -605,6 +624,27 @@ const ActivityForm = ({ isIntervention = false }: ActivityFormProps) => {
                     className="mt-1"
                         rows={4}
                   />
+                    </div>
+
+                <div>
+                      <Label htmlFor="subject_id" className="text-sm font-medium">
+                        Área/Asignatura<span className="text-red-500">*</span>
+                      </Label>
+                      <Select 
+                        value={activity.subject_id || ""} 
+                        onValueChange={(value) => setActivity(prev => ({ ...prev, subject_id: value }))}
+                      >
+                        <SelectTrigger className="mt-1">
+                          <SelectValue placeholder="Selecciona el área de la actividad" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {subjects.map((subject) => (
+                            <SelectItem key={subject.id} value={subject.id}>
+                              {subject.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                 </div>
                 

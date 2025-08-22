@@ -31,6 +31,7 @@ export interface Activity {
   materials: string[];
   learningStyles: string[];
   barriers: string[];
+  subject_id?: string; // Agregar campo para área
   development: ActivityDevelopment;
 }
 

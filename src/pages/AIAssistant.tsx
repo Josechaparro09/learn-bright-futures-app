@@ -35,8 +35,11 @@ const AIAssistant = () => {
   const [selectedBarriers, setSelectedBarriers] = useState<Tables<'barriers'>[]>([]);
   const [learningStyles, setLearningStyles] = useState<LearningStyle[]>([]);
   const [selectedLearningStyles, setSelectedLearningStyles] = useState<LearningStyle[]>([]);
+  const [subjects, setSubjects] = useState<Tables<'subjects'>[]>([]); // Agregar estado para subjects
+  const [selectedSubject, setSelectedSubject] = useState<Tables<'subjects'> | null>(null); // Agregar estado para selectedSubject
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<string>("barriers"); // Agregar estado para activeTab
   
   // Cargar barreras y estilos de aprendizaje
   useEffect(() => {
@@ -70,6 +73,14 @@ const AIAssistant = () => {
         }));
         
         setLearningStyles(formattedStyles);
+
+        // Obtener áreas académicas
+        const { data: subjectsData, error: subjectsError } = await supabase
+          .from('subjects')
+          .select('*');
+          
+        if (subjectsError) throw subjectsError;
+        setSubjects(subjectsData || []);
         
       } catch (error) {
         console.error("Error cargando datos:", error);
@@ -149,11 +160,12 @@ const AIAssistant = () => {
               </CardHeader>
               
               <CardContent>
-                <Tabs defaultValue="barriers">
-                  <TabsList className="w-full mb-4">
-                    <TabsTrigger value="barriers" className="flex-1">Barreras</TabsTrigger>
-                    <TabsTrigger value="styles" className="flex-1">Estilos</TabsTrigger>
-                    <TabsTrigger value="student" className="flex-1">Estudiante</TabsTrigger>
+                <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                  <TabsList className="grid w-full grid-cols-4">
+                    <TabsTrigger value="barriers">Barreras</TabsTrigger>
+                    <TabsTrigger value="styles">Estilos</TabsTrigger>
+                    <TabsTrigger value="area">Área</TabsTrigger>
+                    <TabsTrigger value="student">Estudiante</TabsTrigger>
                   </TabsList>
                   
                   <TabsContent value="barriers">
@@ -233,6 +245,42 @@ const AIAssistant = () => {
                       </div>
                     </div>
                   </TabsContent>
+
+                  <TabsContent value="area">
+                    <div className="space-y-3">
+                      <Label>Selecciona el área académica</Label>
+                      <ScrollArea className="h-[300px] rounded-md border p-2">
+                        <div className="space-y-2">
+                          {subjects.length === 0 ? (
+                            <p className="text-center text-muted-foreground py-4">
+                              No hay áreas académicas registradas
+                            </p>
+                          ) : (
+                            subjects.map(subject => (
+                              <div key={subject.id} className="flex items-start space-x-2">
+                                <Button
+                                  variant={selectedSubject?.id === subject.id ? "default" : "outline"}
+                                  size="sm"
+                                  className="w-full justify-start h-auto py-2"
+                                  onClick={() => setSelectedSubject(subject)}
+                                >
+                                  <div>
+                                    <p className="font-medium text-left">{subject.name}</p>
+                                  </div>
+                                </Button>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      </ScrollArea>
+                      
+                      <div className="pt-2">
+                        <p className="text-sm">
+                          {selectedSubject ? 'Área seleccionada: ' + selectedSubject.name : 'Ninguna área seleccionada'}
+                        </p>
+                      </div>
+                    </div>
+                  </TabsContent>
                   
                   <TabsContent value="student">
                     <div className="space-y-3">
@@ -291,6 +339,22 @@ const AIAssistant = () => {
                               {style.name}
                             </Badge>
                           ))
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <p className="text-sm font-medium">Área académica:</p>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {!selectedSubject ? (
+                          <Badge variant="outline" className="border-red-200 text-red-500">
+                            <CircleSlash className="h-3 w-3 mr-1" />
+                            Ninguna seleccionada
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline">
+                            {selectedSubject.name}
+                          </Badge>
                         )}
                       </div>
                     </div>

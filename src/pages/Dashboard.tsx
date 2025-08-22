@@ -10,7 +10,6 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PlusCircle, BookOpen, Brain, Users, Clock, AlertCircle, Activity, ChevronRight, BarChart2, User } from "lucide-react";
 import DashboardStats from "@/components/DashboardStats";
-import DeviceDiagnostics from "@/components/DeviceDiagnostics";
 
 // Tipos para los datos extraídos de la base de datos
 type ActivityCount = {
@@ -59,6 +58,12 @@ type ActivityByMonth = {
   count: number;
 };
 
+type SubjectData = {
+  name: string;
+  count: number;
+  color: string;
+};
+
 // Tipos para los resultados de las consultas RPC
 type BarrierActivityCount = {
   name: string;
@@ -74,6 +79,12 @@ type LearningStyleActivityCount = {
 type ActivityMonthCount = {
   month: string;
   count: number;
+};
+
+type SubjectActivityCount = {
+  name: string;
+  count: number;
+  color: string;
 };
 
 // Tipo para el perfil del usuario
@@ -97,9 +108,9 @@ const Dashboard = () => {
   const [barrierStats, setBarrierStats] = useState<BarrierData[]>([]);
   const [learningStyleStats, setLearningStyleStats] = useState<LearningStyleData[]>([]);
   const [activityByMonth, setActivityByMonth] = useState<ActivityByMonth[]>([]);
+  const [subjectStats, setSubjectStats] = useState<SubjectData[]>([]); // Agregar estado para áreas
   const [error, setError] = useState<string | null>(null);
   const [profileData, setProfileData] = useState<ProfileData | null>(null);
-  const [showDiagnostics, setShowDiagnostics] = useState(false);
 
   useEffect(() => {
     const fetchProfileData = async () => {
@@ -358,6 +369,42 @@ const Dashboard = () => {
             { name: "Kinestésico", count: 15, color: "#f97316" },
             { name: "Lector/Escritor", count: 12, color: "#8b5cf6" }
           ]);
+        }
+
+        // Obtener estadísticas por área/subject
+        const { data: subjectData, error: subjectError } = await supabase
+          .from('activities')
+          .select(`
+            subject_id,
+            subjects!inner(name)
+          `)
+          .not('subject_id', 'is', null);
+        
+        if (subjectError) {
+          console.warn("No se pudo obtener estadísticas por área:", subjectError);
+          // Usar datos de demostración
+          setSubjectStats([
+            { name: "Matemáticas", count: 15, color: "#3b82f6" },
+            { name: "Español", count: 12, color: "#10b981" },
+            { name: "Ciencias", count: 8, color: "#f97316" },
+            { name: "Sociales", count: 10, color: "#8b5cf6" }
+          ]);
+        } else {
+          // Procesar datos por área
+          const subjectCounts: Record<string, number> = {};
+          subjectData.forEach((item: any) => {
+            const subjectName = item.subjects?.name || 'Sin área';
+            subjectCounts[subjectName] = (subjectCounts[subjectName] || 0) + 1;
+          });
+          
+          const colors = ["#3b82f6", "#10b981", "#f97316", "#8b5cf6", "#ec4899", "#06b6d4"];
+          const processedData = Object.entries(subjectCounts).map(([name, count], index) => ({
+            name,
+            count,
+            color: colors[index % colors.length]
+          }));
+          
+          setSubjectStats(processedData);
         }
 
         // Obtener estadísticas de actividades por mes
@@ -636,24 +683,7 @@ const Dashboard = () => {
           </Button>
         </div>
 
-        {/* Botón de diagnóstico */}
-        <div className="flex justify-center mb-6">
-          <Button 
-            onClick={() => setShowDiagnostics(!showDiagnostics)} 
-            variant="outline"
-            className="text-amber-600 border-amber-200 hover:bg-amber-50"
-          >
-            <AlertTriangle className="h-4 w-4 mr-2" />
-            {showDiagnostics ? 'Ocultar' : 'Mostrar'} Diagnóstico del Dispositivo
-          </Button>
-        </div>
 
-        {/* Componente de diagnóstico */}
-        {showDiagnostics && (
-          <div className="mb-8">
-            <DeviceDiagnostics />
-          </div>
-        )}
 
         {/* Layout flexible para estadísticas y actividad reciente */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
@@ -669,6 +699,7 @@ const Dashboard = () => {
                 barrierData={barrierStats}
                 learningStyleData={learningStyleStats}
                 activityData={activityByMonth}
+                subjectData={subjectStats}
               />
             )}
           </Card>
