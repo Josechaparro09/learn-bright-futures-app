@@ -93,6 +93,7 @@ CREATE TABLE public.interventions (
   teacher_id UUID REFERENCES auth.users NOT NULL,
   student_id UUID REFERENCES public.students NOT NULL,
   activity_id UUID REFERENCES public.activities NOT NULL,
+  subject TEXT,
   observations TEXT,
   date DATE DEFAULT CURRENT_DATE NOT NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,

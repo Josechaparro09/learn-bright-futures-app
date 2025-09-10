@@ -252,6 +252,7 @@ export type Database = {
           id: string
           observations: string | null
           student_id: string
+          subject: string | null
           teacher_id: string
           updated_at: string
         }
@@ -262,6 +263,7 @@ export type Database = {
           id?: string
           observations?: string | null
           student_id: string
+          subject?: string | null
           teacher_id: string
           updated_at?: string
         }
@@ -272,6 +274,7 @@ export type Database = {
           id?: string
           observations?: string | null
           student_id?: string
+          subject?: string | null
           teacher_id?: string
           updated_at?: string
         }

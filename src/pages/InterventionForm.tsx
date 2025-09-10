@@ -55,6 +55,7 @@ interface SupabaseIntervention {
   activity_id: string;
   teacher_id: string;
   student_id: string;
+  subject?: string;
   observations?: string;
   date?: string;
   created_at?: string;
@@ -107,6 +108,7 @@ const InterventionForm = () => {
       grade: "",
     },
     activity: activityIdFromURL,
+    subject: "",
     barriers: barrierIdFromURL ? [barrierIdFromURL] : [],
     learningStyles: stylesFromURL,
     date: new Date(),
@@ -339,6 +341,7 @@ const InterventionForm = () => {
                 grade: studentData?.grade || "",
               },
               activity: interventionData.activity_id,
+              subject: interventionData.subject || "",
               barriers: barrierData?.map(b => b.barrier_id) || [],
               learningStyles: styleData?.map(s => s.learning_style_id) || [],
               date: interventionData.date ? new Date(interventionData.date) : new Date(),
@@ -528,6 +531,7 @@ const InterventionForm = () => {
         teacher_id: user.id, // ID real del usuario autenticado
         student_id: studentId,
         activity_id: intervention.activity,
+        subject: intervention.subject || null,
         observations: intervention.observations,
         date: intervention.date.toISOString().split('T')[0], // Solo la fecha en formato YYYY-MM-DD
         created_at: isEditing ? undefined : new Date().toISOString()
@@ -691,6 +695,19 @@ const InterventionForm = () => {
                     />
                   </PopoverContent>
                 </Popover>
+              </div>
+
+              {/* Sección: Materia/Asignatura */}
+              <div className="p-4">
+                <Label htmlFor="subject" className="mb-1.5 block text-sm font-medium">Materia/Asignatura</Label>
+                <Input
+                  id="subject"
+                  name="subject"
+                  value={intervention.subject || ""}
+                  onChange={handleInputChange}
+                  placeholder="Ej: Matemáticas, Español, Ciencias..."
+                  className="text-sm h-9"
+                />
               </div>
 
               {/* Sección: Estudiante */}

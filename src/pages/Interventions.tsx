@@ -43,6 +43,7 @@ interface SupabaseIntervention {
   teacher_id: string;
   student_id: string;
   activity_id: string;
+  subject?: string;
   observations?: string;
   date: string;
   created_at: string;
@@ -95,6 +96,7 @@ interface CompleteIntervention {
   };
   activity: string;
   activityName: string;
+  subject?: string; // Materia/asignatura específica de la intervención
   subjectName?: string; // Agregar campo para el área de la actividad
   barriers: string[];
   learningStyles: string[];
@@ -247,6 +249,7 @@ const Interventions = () => {
             },
             activity: intervention.activity_id,
             activityName: activity?.name || "Actividad desconocida",
+            subject: intervention.subject || "",
             subjectName: subjectName,
             barriers: interventionBarriers?.map(b => b.barrier_id) || [],
             learningStyles: interventionStyles?.map(s => s.learning_style_id) || [],
@@ -383,6 +386,7 @@ const Interventions = () => {
       intervention.teacherName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       intervention.student.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       intervention.activityName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (intervention.subject && intervention.subject.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (intervention.subjectName && intervention.subjectName.toLowerCase().includes(searchTerm.toLowerCase())); // Agregar búsqueda por área
 
     // Filtro por profesor
@@ -765,14 +769,19 @@ const Interventions = () => {
                           <div className="flex items-center justify-between">
                             <div>
                               <p className="text-gray-800 font-medium">{intervention.activityName}</p>
-                              {intervention.subjectName && (
-                                <div className="mt-1">
+                              <div className="mt-1 flex flex-wrap gap-1">
+                                {intervention.subject && (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                    📚 {intervention.subject}
+                                  </span>
+                                )}
+                                {intervention.subjectName && (
                                   <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                                     <BookOpen size={10} className="mr-1" />
                                     {intervention.subjectName}
                                   </span>
-                                </div>
-                              )}
+                                )}
+                              </div>
                             </div>
                         <Dialog>
                           <DialogTrigger asChild>

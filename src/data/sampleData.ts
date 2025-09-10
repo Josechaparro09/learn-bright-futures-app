@@ -46,6 +46,7 @@ export interface Intervention {
   teacherName: string;
   student: Student;
   activity: string;
+  subject?: string;
   barriers: string[];
   learningStyles: string[];
   observations: string;
